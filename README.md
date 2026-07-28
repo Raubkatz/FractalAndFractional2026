@@ -4,7 +4,7 @@ Official code repository for the paper:
 
 > **Fractional Optimizers Meet Fractal Activation Functions: An Empirical Study of Multi-Scale Optimization in Neural Networks**
 
-**Authors:** Sebastian Raubitzek, Georg Goldenits, Sebastian Schrittwieser, Philip König, and Kevin Mallinger
+**Author of this Repository:** Sebastian Raubitzek
 
 ---
 
