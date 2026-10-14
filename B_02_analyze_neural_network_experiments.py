@@ -112,13 +112,23 @@ warnings.filterwarnings("ignore", category=UserWarning)
 #RESULTS_ROOT = Path("results_fractional_activation_optimizer_study_21_50iterations_reduced")
 #ANALYSIS_ROOT = Path("nn_classification_analysis_21_50iterations_reduced")
 
-RESULTS_ROOT = Path("final_results_classificaiton_experiments_40runs")
-ANALYSIS_ROOT = Path("analysis_final_nn_40runs")
+#RESULTS_ROOT = Path("final_results_classificaiton_experiments_40runs")
+#ANALYSIS_ROOT = Path("analysis_final_nn_40runs")
+
+RESULTS_ROOT = Path("compiled_results_all_experiments")
+ANALYSIS_ROOT = Path("compiled_analysis_October2026")
 
 
 
-# Ranking primary metric direction (higher accuracy is better)
+# Ranking primary metric direction (higher is better)
 RANK_BY = "accuracy"           # "accuracy" or "f1_macro"
+
+if RANK_BY not in {"accuracy", "f1_macro"}:
+    raise ValueError('RANK_BY must be either "accuracy" or "f1_macro".')
+
+RANK_MEAN_COL = f"{RANK_BY}_mean"
+RANK_SECONDARY_MEAN_COL = "f1_macro_mean" if RANK_BY == "accuracy" else "accuracy_mean"
+RANK_DISPLAY_NAME = "mean accuracy" if RANK_BY == "accuracy" else "mean macro-F1"
 
 # CI level
 CI_Z = 1.96
@@ -185,6 +195,10 @@ FRACTAL_ACTIVATIONS = {
 }
 
 STANDARD_ACTIVATIONS = {"relu", "tanh"}
+
+# Additional activation-family analysis: exclude only the x+sin
+# Weierstrass-Mandelbrot activation. The original analyses remain unchanged.
+ACTIVATION_FAMILY_EXCLUDE_XPSIN = "weierstrass_mandelbrot_function_xpsin"
 
 
 # Plot-only abbreviations. These are used only for axis labels, tick labels,
@@ -460,12 +474,12 @@ def compute_config_statistics(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _rank_configs(df: pd.DataFrame) -> pd.DataFrame:
-    """Add rank_overall (per dataset) by accuracy_mean desc."""
+    """Add rank_overall (per dataset) by the selected primary ranking metric."""
     frames = []
     for dataset, grp in df.groupby("dataset", dropna=False):
         grp = grp.copy()
         grp = grp.sort_values(
-            ["accuracy_mean", "f1_macro_mean", "training_time_seconds_mean"],
+            [RANK_MEAN_COL, RANK_SECONDARY_MEAN_COL, "training_time_seconds_mean"],
             ascending=[False, False, True],
         ).reset_index(drop=True)
         grp["rank_overall"] = np.arange(1, len(grp) + 1)
@@ -478,14 +492,18 @@ def _rank_configs(df: pd.DataFrame) -> pd.DataFrame:
 def compute_optimizer_statistics(df: pd.DataFrame) -> pd.DataFrame:
     """
     Collapse across activations and vderivs — best config per optimizer per dataset.
-    Returns one row per (dataset, optimizer), using the config with the highest mean accuracy.
+    Returns one row per (dataset, optimizer), using the config with the highest
+    value of the selected primary ranking metric.
     """
     config_stats = compute_config_statistics(df)
     rows = []
 
     for (dataset, optimizer), grp in config_stats.groupby(["dataset", "optimizer"], dropna=False):
-        # Best config = highest accuracy_mean
-        best = grp.sort_values("accuracy_mean", ascending=False).iloc[0]
+        # Best config = highest selected primary metric
+        best = grp.sort_values(
+            [RANK_MEAN_COL, RANK_SECONDARY_MEAN_COL, "training_time_seconds_mean"],
+            ascending=[False, False, True],
+        ).iloc[0]
         rows.append(best.to_dict())
 
     out = pd.DataFrame(rows)
@@ -498,7 +516,7 @@ def _rank_optimizers(df: pd.DataFrame) -> pd.DataFrame:
     for dataset, grp in df.groupby("dataset", dropna=False):
         grp = grp.copy()
         grp = grp.sort_values(
-            ["accuracy_mean", "f1_macro_mean", "training_time_seconds_mean"],
+            [RANK_MEAN_COL, RANK_SECONDARY_MEAN_COL, "training_time_seconds_mean"],
             ascending=[False, False, True],
         ).reset_index(drop=True)
         grp["rank_optimizer"] = np.arange(1, len(grp) + 1)
@@ -514,7 +532,10 @@ def compute_activation_statistics(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
 
     for (dataset, activation), grp in config_stats.groupby(["dataset", "activation"], dropna=False):
-        best = grp.sort_values("accuracy_mean", ascending=False).iloc[0]
+        best = grp.sort_values(
+            [RANK_MEAN_COL, RANK_SECONDARY_MEAN_COL, "training_time_seconds_mean"],
+            ascending=[False, False, True],
+        ).iloc[0]
         rows.append(best.to_dict())
 
     out = pd.DataFrame(rows)
@@ -559,7 +580,7 @@ def compute_vderiv_sensitivity(df: pd.DataFrame) -> pd.DataFrame:
 
 def compute_activation_ranking(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Rank activations by mean accuracy per dataset, collapsed across ALL optimizers.
+    Rank activations by the selected primary metric per dataset, collapsed across ALL optimizers.
     One row per (dataset, activation) — the primary activation-focused view.
     """
     rows = []
@@ -578,11 +599,14 @@ def compute_activation_ranking(df: pd.DataFrame) -> pd.DataFrame:
 
     out = pd.DataFrame(rows)
 
-    # Rank per dataset by mean accuracy descending
+    # Rank per dataset by the selected primary metric descending
     frames = []
     for dataset, grp in out.groupby("dataset", dropna=False):
         grp = grp.copy()
-        grp = grp.sort_values("accuracy_mean", ascending=False).reset_index(drop=True)
+        grp = grp.sort_values(
+            [RANK_MEAN_COL, RANK_SECONDARY_MEAN_COL],
+            ascending=[False, False],
+        ).reset_index(drop=True)
         grp["rank_activation"] = np.arange(1, len(grp) + 1)
         frames.append(grp)
     return pd.concat(frames, ignore_index=True) if frames else out
@@ -671,10 +695,13 @@ def build_optimizer_activation_heatmap(df: pd.DataFrame, dataset: str) -> pd.Dat
     sub = df[df["dataset"] == dataset].copy()
     config_stats = compute_config_statistics(sub)
 
-    # Best config per (optimizer, activation)
+    # Best config per (optimizer, activation), selected by the primary ranking metric
     best_rows = []
     for (optimizer, activation), grp in config_stats.groupby(["optimizer", "activation"], dropna=False):
-        best = grp.sort_values("accuracy_mean", ascending=False).iloc[0]
+        best = grp.sort_values(
+            [RANK_MEAN_COL, RANK_SECONDARY_MEAN_COL],
+            ascending=[False, False],
+        ).iloc[0]
         best_rows.append({"optimizer": optimizer, "activation": activation, "accuracy_mean": best["accuracy_mean"]})
 
     if not best_rows:
@@ -1014,11 +1041,12 @@ def plot_cross_dataset_summary(opt_stats: pd.DataFrame, out_dir: Path) -> None:
         .agg(
             mean_accuracy=("accuracy_mean", "mean"),
             std_accuracy=("accuracy_mean", "std"),
+            mean_f1=("f1_macro_mean", "mean"),
             n_datasets=("dataset", "nunique"),
             optimizer_group=("optimizer_group", "first"),
         )
         .reset_index()
-        .sort_values("mean_accuracy", ascending=False)
+        .sort_values("mean_accuracy" if RANK_BY == "accuracy" else "mean_f1", ascending=False)
     )
 
     colors = bar_color_by_group(summary["optimizer"].tolist())
@@ -1255,6 +1283,57 @@ def plot_activation_family_x_optgroup_lines(grp_x_act: pd.DataFrame, dataset: st
     _finish_fig(fig, out_dir / "activation_family_x_optgroup_lines.png")
 
 
+def plot_activation_family_x_optgroup_lines_without_xpsin(
+    grp_x_act: pd.DataFrame,
+    dataset: str,
+    out_dir: Path,
+) -> None:
+    """
+    Additional line plot identical to plot_activation_family_x_optgroup_lines(),
+    but based on statistics computed after excluding
+    weierstrass_mandelbrot_function_xpsin.
+    """
+    sub = grp_x_act[grp_x_act["dataset"] == dataset].copy()
+    if sub.empty:
+        return
+
+    act_families = [f for f in ["Fractal", "Standard"] if f in sub["activation_family"].values]
+    x_labels = [g for g in GROUP_ORDER if g in sub["optimizer_group"].values]
+    if not x_labels:
+        return
+
+    x = np.arange(len(x_labels))
+    colors_map = {"Fractal": "#589641", "Standard": "#2F7F74"}
+
+    fig, ax = plt.subplots(figsize=FIGSIZE_BAR)
+    for fam in act_families:
+        vals, sems = [], []
+        for grp_name in x_labels:
+            m = sub[(sub["optimizer_group"] == grp_name) & (sub["activation_family"] == fam)]
+            vals.append(float(m["accuracy_mean"].values[0]) if not m.empty else np.nan)
+            sems.append(float(m["accuracy_sem"].values[0])  if not m.empty else np.nan)
+        vals = np.array(vals, dtype=float)
+        sems = np.array(sems, dtype=float)
+        color = colors_map.get(fam, "#888888")
+        ax.plot(x, vals, marker="o", label=fam, color=color, linewidth=2.5, markersize=9)
+        ax.fill_between(x, vals - sems, vals + sems, alpha=0.15, color=color)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(x_labels, rotation=22, ha="center")
+    ax.set_title(
+        f"[{dataset}]  Activation family across optimizer groups "
+        f"(without wei. x+sin)",
+        fontsize=12,
+    )
+    ax.set_ylabel("Mean accuracy ± SEM")
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
+    _finish_fig(
+        fig,
+        out_dir / "activation_family_x_optgroup_lines_without_xpsin.png",
+    )
+
+
 def plot_all_optimizers_x_activations_heatmap(df: pd.DataFrame, dataset: str,
                                                out_dir: Path) -> None:
     """
@@ -1287,12 +1366,13 @@ def plot_all_optimizers_x_activations_heatmap(df: pd.DataFrame, dataset: str,
     data = pivot.values.astype(float)
     vmin, vmax = np.nanmin(data), np.nanmax(data)
 
-    fig, ax = plt.subplots(figsize=FIGSIZE_HEAT)
+    fig, ax = plt.subplots(figsize=(FIGSIZE_HEAT[0], FIGSIZE_HEAT[1] * 1.10))
     im = ax.imshow(data, aspect="auto", cmap=HEAT_CMAP, vmin=vmin, vmax=vmax)
     ax.set_xticks(range(len(pivot.columns)))
     ax.set_xticklabels(plot_activation_labels(pivot.columns), rotation=65, ha="center", fontsize=8)
     ax.set_yticks(range(len(pivot.index)))
-    ax.set_yticklabels(plot_optimizer_labels(pivot.index), fontsize=8)
+    ax.set_yticklabels(plot_optimizer_labels(pivot.index), fontsize=7)
+    ax.tick_params(axis="y", pad=7)
     ax.set_title(f"[{dataset}]  All optimizers × all activations — mean accuracy", fontsize=11)
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
@@ -1312,9 +1392,13 @@ def plot_cross_dataset_activation_summary(act_ranking: pd.DataFrame, out_dir: Pa
 
     summary = (
         act_ranking.groupby(["activation", "activation_family"])
-        .agg(mean_acc=("accuracy_mean", "mean"), std_acc=("accuracy_mean", "std"))
+        .agg(
+            mean_acc=("accuracy_mean", "mean"),
+            std_acc=("accuracy_mean", "std"),
+            mean_f1=("f1_macro_mean", "mean"),
+        )
         .reset_index()
-        .sort_values("mean_acc", ascending=False)
+        .sort_values("mean_acc" if RANK_BY == "accuracy" else "mean_f1", ascending=False)
     )
     if summary.empty:
         return
@@ -1402,7 +1486,7 @@ def write_activation_report(
     lines.append("")
 
     # ---- 1. Activation ranking ----
-    lines.append("1. Activation ranking (mean accuracy across ALL optimizers, ranked desc)")
+    lines.append(f"1. Activation ranking ({RANK_DISPLAY_NAME} across ALL optimizers, ranked desc)")
     lines.append("-" * W)
     sub_act = act_ranking[act_ranking["dataset"] == dataset].sort_values("rank_activation")
     if not sub_act.empty:
@@ -1428,7 +1512,7 @@ def write_activation_report(
             f1_mean=("f1_macro", "mean"),
         )
         .reset_index()
-        .sort_values("acc_mean", ascending=False)
+        .sort_values("acc_mean" if RANK_BY == "accuracy" else "f1_mean", ascending=False)
     )
     lines.append(_df_to_text(fam_summary))
     lines.append("")
@@ -1495,14 +1579,15 @@ def write_activation_report(
         grp_sub = sub_df[sub_df["optimizer_group"] == grp]
         if grp_sub.empty:
             continue
-        act_means = grp_sub.groupby("activation")["accuracy"].mean().sort_values(ascending=False)
+        act_means = grp_sub.groupby("activation")[RANK_BY].mean().sort_values(ascending=False)
         if act_means.empty:
             continue
         best_act = act_means.index[0]
-        best_acc = float(act_means.iloc[0])
+        best_value = float(act_means.iloc[0])
         fam = activation_family(best_act)
+        metric_label = "acc" if RANK_BY == "accuracy" else "f1"
         lines.append(
-            f"  {grp:<25s}  best={best_act:<45s}  acc={fmt(best_acc)}  family={fam}"
+            f"  {grp:<25s}  best={best_act:<45s}  {metric_label}={fmt(best_value)}  family={fam}"
         )
     lines.append("")
 
@@ -1514,15 +1599,16 @@ def write_activation_report(
         act_sub = sub_df[sub_df["activation"] == act]
         if act_sub.empty:
             continue
-        grp_means = act_sub.groupby("optimizer_group")["accuracy"].mean().sort_values(ascending=False)
+        grp_means = act_sub.groupby("optimizer_group")[RANK_BY].mean().sort_values(ascending=False)
         if grp_means.empty:
             continue
         best_grp = grp_means.index[0]
-        best_acc = float(grp_means.iloc[0])
+        best_value = float(grp_means.iloc[0])
         fam = activation_family(act)
+        metric_label = "acc" if RANK_BY == "accuracy" else "f1"
         lines.append(
             f"  {act:<45s} ({fam:<9s})  "
-            f"best_group={best_grp:<25s}  acc={fmt(best_acc)}"
+            f"best_group={best_grp:<25s}  {metric_label}={fmt(best_value)}"
         )
     lines.append("")
 
@@ -1587,7 +1673,7 @@ def write_combined_activation_report(
             n_datasets=("dataset", "nunique"),
         )
         .reset_index()
-        .sort_values("avg_acc", ascending=False)
+        .sort_values("avg_acc" if RANK_BY == "accuracy" else "avg_f1", ascending=False)
         .reset_index(drop=True)
     )
     cross_act.index = cross_act.index + 1
@@ -1608,7 +1694,7 @@ def write_combined_activation_report(
             avg_f1=("f1_macro", "mean"),
         )
         .reset_index()
-        .sort_values("avg_acc", ascending=False)
+        .sort_values("avg_acc" if RANK_BY == "accuracy" else "avg_f1", ascending=False)
     )
     lines.append(fam_cross.to_string(index=False))
     lines.append("")
@@ -1711,7 +1797,7 @@ def write_dataset_report(
     lines.append("")
 
     # Optimizer ranking
-    lines.append("Optimizer ranking (best config per optimizer, ranked by mean accuracy desc)")
+    lines.append(f"Optimizer ranking (best config per optimizer, ranked by {RANK_DISPLAY_NAME} desc)")
     lines.append("-" * W)
     nn = opt_stats[opt_stats["dataset"] == dataset].sort_values("rank_optimizer")
     rank_cols = ["rank_optimizer", "optimizer", "optimizer_group",
@@ -1751,7 +1837,9 @@ def write_dataset_report(
                  "accuracy_mean", "accuracy_std", "accuracy_sem",
                  "f1_macro_mean", "training_time_seconds_mean"]
         gcols = [c for c in gcols if c in grp_sub.columns]
-        lines.append(_df_to_text(grp_sub[gcols].sort_values("accuracy_mean", ascending=False)))
+        lines.append(_df_to_text(
+            grp_sub[gcols].sort_values(RANK_MEAN_COL, ascending=False)
+        ))
     lines.append("")
 
     # Activation family summary
@@ -1766,7 +1854,7 @@ def write_dataset_report(
             f1_mean=("f1_macro", "mean"),
         )
         .reset_index()
-        .sort_values("acc_mean", ascending=False)
+        .sort_values("acc_mean" if RANK_BY == "accuracy" else "f1_mean", ascending=False)
     )
     lines.append(_df_to_text(act_summary))
     lines.append("")
@@ -1783,10 +1871,11 @@ def write_dataset_report(
         lines.append("")
 
     # Top-5 full config breakdown
-    lines.append("Top-5 configurations (by mean accuracy, all configs)")
+    lines.append(f"Top-5 configurations (by {RANK_DISPLAY_NAME}, all configs)")
     lines.append("-" * W)
     cs = config_stats[config_stats["dataset"] == dataset].sort_values(
-        "accuracy_mean", ascending=False
+        [RANK_MEAN_COL, RANK_SECONDARY_MEAN_COL],
+        ascending=[False, False],
     ).head(5)
     top_cols = ["optimizer", "activation", "vderiv", "history_size",
                 "accuracy_mean", "accuracy_std", "f1_macro_mean",
@@ -1825,7 +1914,7 @@ def write_combined_report(
 
 
     # Cross-dataset rankings
-    lines.append("Cross-dataset mean accuracy per optimizer (mean of per-dataset best-config accuracy)")
+    lines.append(f"Cross-dataset optimizer ranking (mean of per-dataset best-config {RANK_DISPLAY_NAME})")
     lines.append("-" * W)
     cross = (
         opt_stats.groupby("optimizer")
@@ -1838,7 +1927,7 @@ def write_combined_report(
             optimizer_group=("optimizer_group", "first"),
         )
         .reset_index()
-        .sort_values("avg_acc", ascending=False)
+        .sort_values("avg_acc" if RANK_BY == "accuracy" else "avg_f1", ascending=False)
         .reset_index(drop=True)
     )
     cross.index = cross.index + 1
@@ -1859,7 +1948,7 @@ def write_combined_report(
             n_optimizers=("optimizer", "nunique"),
         )
         .reset_index()
-        .sort_values("avg_acc", ascending=False)
+        .sort_values("avg_acc" if RANK_BY == "accuracy" else "avg_f1", ascending=False)
     )
     lines.append(grp_cross.to_string(index=False))
     lines.append("")
@@ -1876,7 +1965,7 @@ def write_combined_report(
             avg_f1=("f1_macro", "mean"),
         )
         .reset_index()
-        .sort_values("avg_acc", ascending=False)
+        .sort_values("avg_acc" if RANK_BY == "accuracy" else "avg_f1", ascending=False)
     )
     lines.append(act_cross.to_string(index=False))
     lines.append("")
@@ -1904,6 +1993,7 @@ def main() -> None:
     print("=" * 100)
     print("NN Classification experiment analysis  —  21 fractional optimizers")
     print("=" * 100)
+    print(f"Primary ranking metric: {RANK_BY}")
     print(f"Loading results from: {RESULTS_ROOT}")
 
     # ---- Load ----
@@ -1937,6 +2027,8 @@ def main() -> None:
     print("Computing activation-focused statistics ...")
     act_ranking       = compute_activation_ranking(df)
     grp_x_act         = compute_optgroup_x_activation_family(df)
+    df_without_xpsin  = df[df["activation"] != ACTIVATION_FAMILY_EXCLUDE_XPSIN].copy()
+    grp_x_act_without_xpsin = compute_optgroup_x_activation_family(df_without_xpsin)
     fvs_df, fvs_gains = compute_fractal_vs_standard(df)
 
     # ---- Save combined CSVs ----
@@ -1949,6 +2041,10 @@ def main() -> None:
     vderiv_df.to_csv(ANALYSIS_ROOT / "combined_vderiv_sensitivity.csv", index=False)
     act_ranking.to_csv(ANALYSIS_ROOT / "combined_activation_ranking.csv", index=False)
     grp_x_act.to_csv(ANALYSIS_ROOT / "combined_optgroup_x_activation_family.csv", index=False)
+    grp_x_act_without_xpsin.to_csv(
+        ANALYSIS_ROOT / "combined_optgroup_x_activation_family_without_xpsin.csv",
+        index=False,
+    )
     fvs_df.to_csv(ANALYSIS_ROOT / "combined_fractal_vs_standard.csv", index=False)
     fvs_gains.to_csv(ANALYSIS_ROOT / "combined_fractal_gains.csv", index=False)
 
@@ -2001,6 +2097,8 @@ def main() -> None:
             d_dir / "activation_ranking.csv", index=False)
         grp_x_act[grp_x_act["dataset"] == dataset].to_csv(
             d_dir / "optgroup_x_activation_family.csv", index=False)
+        grp_x_act_without_xpsin[grp_x_act_without_xpsin["dataset"] == dataset].to_csv(
+            d_dir / "optgroup_x_activation_family_without_xpsin.csv", index=False)
         if not fvs_gains.empty and "dataset" in fvs_gains.columns:
             fvs_gains[fvs_gains["dataset"] == dataset].to_csv(
                 d_dir / "fractal_vs_standard_gains.csv", index=False)
@@ -2053,6 +2151,9 @@ def main() -> None:
             plot_activation_boxplot_chart(df, act_ranking, dataset, plots_dir)
             plot_optgroup_x_activation_family_heatmap(grp_x_act, dataset, plots_dir)
             plot_activation_family_x_optgroup_lines(grp_x_act, dataset, plots_dir)
+            plot_activation_family_x_optgroup_lines_without_xpsin(
+                grp_x_act_without_xpsin, dataset, plots_dir
+            )
             plot_all_optimizers_x_activations_heatmap(df, dataset, plots_dir)
             d_gains = (fvs_gains[fvs_gains["dataset"] == dataset]
                        if not fvs_gains.empty and "dataset" in fvs_gains.columns
