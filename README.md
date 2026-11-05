@@ -17,9 +17,11 @@ The experiments are divided into two parts:
 1. **Controlled loss-surface optimization** on standard and additively perturbed Ackley and Himmelblau functions.
 2. **Neural-network classification** on ten public OpenML datasets using 21 optimizers, six activation functions, and 40 repeated runs per configuration.
 
-The final classification experiment contains **432 optimizer–activation–parameter configurations per dataset**, corresponding to **17,280 neural-network training runs per dataset and 172,800 training runs across all ten datasets**.
+The final classification experiment contains **504 optimizer–activation–parameter configurations per dataset** (21 optimizers × 6 activations × 4 parameter settings), corresponding to **20,160 neural-network training runs per dataset and 201,600 training runs across all ten datasets**.
 
 The final loss-surface experiment evaluates **84 optimizer–parameter configurations per surface variant**, with **100 repeated runs per configuration**. Across standard Ackley, additive Ackley, standard Himmelblau, and additive Himmelblau, this corresponds to **33,600 surface-optimization runs**.
+
+This repository contains the original experimental framework. Updated optimizer and activation-function implementations for **Keras 3 (TensorFlow 2.21)** and **PyTorch 2.15** are maintained separately in [Fractal_Fractional_Base](https://github.com/Raubkatz/Fractal_Fractional_Base). The companion repository is not a substitute for the experiment scripts and analysis workflow documented here.
 
 ---
 
@@ -69,7 +71,7 @@ FractalAndFractional2026/
 └── D_01_memory_degeneracy_kernel_analysis.py
 ```
 
-> Rename uploaded files to the clean names shown above before execution so that all Python imports resolve correctly.
+> Keep the Python module filenames consistent with those shown above so that the imports resolve correctly.
 
 ---
 
@@ -435,19 +437,23 @@ The final classification suite combines:
 The final evaluated experiment contains:
 
 ```text
-432 optimizer–activation–parameter configurations per dataset
-× 40 repeated runs
-= 17,280 training runs per dataset
+21 optimizers × 6 activation functions × 4 parameter settings
+= 504 optimizer–activation–parameter configurations per dataset
+
+504 configurations × 40 repeated runs
+= 20,160 training runs per dataset
 ```
 
 Across ten datasets:
 
 ```text
-17,280 × 10
-= 172,800 neural-network training runs
+20,160 × 10
+= 201,600 neural-network training runs
 ```
 
 The optimizer-specific parameter search is balanced so that every optimizer contributes four candidate settings.
+
+**Reproduction note:** The totals above describe the final experimental design reported in the manuscript. Reproducing those totals requires the executed classification runner to use the full four-setting grid for each of the 21 optimizers (including fractional order `1.75` where applicable). Verify the active settings in `B_01_run_nn_classification.py` against this documented grid before starting a full reproduction run. Neither GitHub repository is assigned a separate archival DOI.
 
 The analysis keeps several views separate:
 
