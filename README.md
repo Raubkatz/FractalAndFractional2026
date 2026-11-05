@@ -25,6 +25,29 @@ This repository contains the original experimental framework. Updated optimizer 
 
 ---
 
+## 📚 Attribution, Original Publications, and Code Sources
+
+The optimizers and activation functions used in this repository originate from the publications identified below. The references acknowledge the underlying methods and mathematical constructions; they do not imply that the implementation files were copied directly from the original authors' code.
+
+| Components in this repository | Original publications | Source and attribution |
+|---|---|---|
+| `class_b_tf_fractional_optimizers_OHA.py`: `FSGD`, `FAdam`, `FRMSprop`, `FAdadelta` | Herrera-Alcántara and co-authors [[H1]](#ref-h1), [[H2]](#ref-h2) | Herrera-style fractional gradient scaling. The original TensorFlow–Keras work identifies [ia.azc.uam.mx](http://ia.azc.uam.mx/) as a source-code location; the subsequent article describes the original authors' PyTorch work. These papers are the methodological sources. |
+| `class_d_related_work_optimizers.py`: `AdaGL` | Chen, Zhang, and Mu [[R1]](#ref-r1) | Implementation of the published adaptive Grünwald–Letnikov optimizer. |
+| `class_d_related_work_optimizers.py`: `FCSGD_GL`, `FCAdam_GL` | Zhou, Zhao, and Huang [[R2]](#ref-r2) | Implementation of the published short-memory fractional methods. |
+| `class_d_related_work_optimizers.py`: `AOFGD_SGD`, `AOFGD_Adam` | Xiang et al. [[R3]](#ref-r3) | Implementation of the adaptive-order fractional-gradient approach described in the cited preprint. |
+| `class_c_tf_fractional_optimizers_SR.py`: `MemoryF*` | Present study [[O1]](#ref-o1); Grünwald–Letnikov foundations [[G1]](#ref-g1), [[G2]](#ref-g2) | Study-specific gradient-memory implementations incorporating norm matching and a descent safeguard. |
+| `class_minimal_fractional_adaptive_optimizers.py`: `AdaptiveMemoryF*` | Present study [[O1]](#ref-o1) | Adaptive mixing of the ordinary gradient and a fractional-memory direction, as described in the article. |
+| `fractal_activation_functions.py` | Predecessor activation-function study [[O2]](#ref-o2); historical sources [[F1]–[F4]](#fractal-functions-mathematical-origins) | The activation functions originate from the predecessor study. Its separate code repository is [Fractal_Activation_Functions](https://github.com/Raubkatz/Fractal_Activation_Functions). |
+| Standard baseline optimizers | Original optimizer literature [[B1]–[B10]](#base-optimizers) | Standard optimization methods supplied by the TensorFlow/Keras framework and their documented implementations. |
+
+**Original-author code and reimplementations.** References [[H1]](#ref-h1) and [[H2]](#ref-h2) document Herrera-Alcántara's original implementations. For AdaGL, FCSGD_GL/FCAdam_GL, and AOFGD, the cited papers are the primary methodological references; the preceding implementation README does not identify direct original-author code downloads. Implementation-specific choices should therefore be checked against the relevant paper rather than assumed to reproduce every undocumented detail of an author's original code.
+
+**Updated implementations.** The companion repository [Fractal_Fractional_Base](https://github.com/Raubkatz/Fractal_Fractional_Base) provides the updated optimizer and activation-function implementations for **Keras 3 (TensorFlow 2.21)** and **PyTorch 2.15**, including additional optimizer families and activation variants. It also documents the independently implemented Cantor-based activations attributed to Chipera, Du, and Tsapara [[C1]](#ref-c1). Those additional activations are distinct from the six-activation classification suite used in this repository's paper experiments.
+
+**Citation guidance.** Cite the original publication of each method used, together with [[O1]](#ref-o1) for the GL-memory and adaptive-memory implementations or the experimental comparison, and [[O2]](#ref-o2) for the fractal activation functions. The original experiment code is provided here; the companion Keras 3/PyTorch code is maintained in the [updated repository](https://github.com/Raubkatz/Fractal_Fractional_Base).
+
+---
+
 ## ✨ Main Components
 
 - 🧮 Classical and fractional TensorFlow optimizers
@@ -609,3 +632,149 @@ python D_01_memory_degeneracy_kernel_analysis.py
 The analysis scripts operate on saved experimental records and do not rerun the main optimization or classification experiments.
 
 ---
+
+## References
+
+- <a id="ref-h1"></a>**[H1]** O. Herrera-Alcántara. Fractional Derivative Gradient-Based Optimizers for Neural Networks and Human Activity Recognition. *Applied Sciences* **12**(18), 9264 (2022). [doi:10.3390/app12189264](https://doi.org/10.3390/app12189264)
+- <a id="ref-h2"></a>**[H2]** O. Herrera-Alcántara, J. R. Castelán-Aguilar. Fractional Gradient Optimizers for PyTorch: Enhancing GAN and BERT. *Fractal and Fractional* **7**(7), 500 (2023). [doi:10.3390/fractalfract7070500](https://doi.org/10.3390/fractalfract7070500)
+- <a id="ref-r1"></a>**[R1]** S. Chen, C. Zhang, H. Mu. An Adaptive Learning Rate Deep Learning Optimizer Using Long and Short-Term Gradients Based on G–L Fractional-Order Derivative. *Neural Processing Letters* **56**, 106 (2024). [doi:10.1007/s11063-024-11571-7](https://doi.org/10.1007/s11063-024-11571-7)
+- <a id="ref-r2"></a>**[R2]** X. Zhou, C. Zhao, Y. Huang. A Deep Learning Optimizer Based on Grünwald–Letnikov Fractional Order Definition. *Mathematics* **11**(2), 316 (2023). [doi:10.3390/math11020316](https://doi.org/10.3390/math11020316)
+- <a id="ref-r3"></a>**[R3]** K. Xiang, C. Zhao, Q. Su, X. Zhou, J. Ye, Y. Huang. AOFGD: Adaptive Order Fractional Gradient Descent Method. SSRN preprint, not peer-reviewed (2025). [doi:10.2139/ssrn.5717167](https://doi.org/10.2139/ssrn.5717167) · [ssrn.com/abstract=5717167](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5717167)
+- <a id="ref-c1"></a>**[C1]** R. Chipera, J. Du, I. Tsapara. Fractal and Chaotic Activation Functions in Echo State Networks: Preprocessing Topology Governs the Echo State Property. arXiv preprint (2025). [arXiv:2512.14675](https://arxiv.org/abs/2512.14675)
+- <a id="ref-o1"></a>**[O1]** S. Raubitzek, G. Goldenits, S. Schrittwieser, P. König, K. Mallinger. Fractional Optimizers Meet Fractal Activation Functions: An Empirical Study of Multi-Scale Optimization in Neural Networks. *Fractal and Fractional* (2026, accepted). [arXiv:2608.14636](https://arxiv.org/abs/2608.14636) · [code](https://github.com/Raubkatz/FractalAndFractional2026)
+- <a id="ref-o2"></a>**[O2]** S. Raubitzek, T. Kietreiber, S. Eresheim, A. Buchelt, K. Mallinger. Fractals in neural networks: Introducing a new class of activation functions. *Communications in Nonlinear Science and Numerical Simulation* **161**, 110064 (2026). [doi:10.1016/j.cnsns.2026.110064](https://doi.org/10.1016/j.cnsns.2026.110064) · [code](https://github.com/Raubkatz/Fractal_Activation_Functions)
+
+**Grünwald–Letnikov background**
+
+- <a id="ref-g1"></a>**[G1]** I. Podlubny. *Fractional Differential Equations.* Mathematics in Science and Engineering, vol. 198. Academic Press, San Diego (1999).
+- <a id="ref-g2"></a>**[G2]** Y. Wei, Y. Chen, S. Cheng, Y. Wang. A Note on Short Memory Principle of Fractional Calculus. *Fractional Calculus and Applied Analysis* **20**, 1382–1404 (2017). [doi:10.1515/fca-2017-0073](https://doi.org/10.1515/fca-2017-0073)
+
+<a id="base-optimizers"></a>**Base optimizers**
+
+- <a id="ref-b1"></a>**[B1]** SGD: H. Robbins, S. Monro. A Stochastic Approximation Method. *Annals of Mathematical Statistics* **22**, 400–407 (1951). [doi:10.1214/aoms/1177729586](https://doi.org/10.1214/aoms/1177729586)
+- <a id="ref-b2"></a>**[B2]** Momentum: B. T. Polyak. Some Methods of Speeding up the Convergence of Iteration Methods. *USSR Computational Mathematics and Mathematical Physics* **4**, 1–17 (1964). [doi:10.1016/0041-5553(64)90137-5](https://doi.org/10.1016/0041-5553(64)90137-5)
+- <a id="ref-b3"></a>**[B3]** Nesterov momentum: Y. Nesterov. A method for solving the convex programming problem with convergence rate O(1/k²). *Soviet Mathematics Doklady* **27**, 372–376 (1983); in deep learning: I. Sutskever, J. Martens, G. Dahl, G. Hinton. On the importance of initialization and momentum in deep learning. *Proc. ICML*, PMLR **28**(3), 1139–1147 (2013). [proceedings.mlr.press/v28/sutskever13](https://proceedings.mlr.press/v28/sutskever13.html)
+- <a id="ref-b4"></a>**[B4]** Adam and Adamax: D. P. Kingma, J. Ba. Adam: A Method for Stochastic Optimization. *ICLR* (2015). [arXiv:1412.6980](https://arxiv.org/abs/1412.6980)
+- <a id="ref-b5"></a>**[B5]** AMSGrad: S. J. Reddi, S. Kale, S. Kumar. On the Convergence of Adam and Beyond. *ICLR* (2018). [openreview.net/forum?id=ryQu7f-RZ](https://openreview.net/forum?id=ryQu7f-RZ)
+- <a id="ref-b6"></a>**[B6]** RMSprop: T. Tieleman, G. Hinton. Lecture 6.5 — RMSProp: Divide the gradient by a running average of its recent magnitude. *Neural Networks for Machine Learning*, Coursera (2012). [lecture slides](https://www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf)
+- <a id="ref-b7"></a>**[B7]** Adadelta: M. D. Zeiler. ADADELTA: An Adaptive Learning Rate Method. arXiv (2012). [arXiv:1212.5701](https://arxiv.org/abs/1212.5701)
+- <a id="ref-b8"></a>**[B8]** Adagrad: J. Duchi, E. Hazan, Y. Singer. Adaptive Subgradient Methods for Online Learning and Stochastic Optimization. *Journal of Machine Learning Research* **12**, 2121–2159 (2011). [jmlr.org (PDF)](https://www.jmlr.org/papers/volume12/duchi11a/duchi11a.pdf)
+- <a id="ref-b9"></a>**[B9]** AdamW: I. Loshchilov, F. Hutter. Decoupled Weight Decay Regularization. *ICLR* (2019). [arXiv:1711.05101](https://arxiv.org/abs/1711.05101)
+- <a id="ref-b10"></a>**[B10]** Nadam: T. Dozat. Incorporating Nesterov Momentum into Adam. Stanford CS229 project report (2015); ICLR 2016 Workshop track. [report (PDF)](http://cs229.stanford.edu/proj2015/054_report.pdf) · [ICLR workshop paper (PDF)](https://openreview.net/pdf/OM0jvwB8jIp57ZJjtNEZ.pdf)
+
+<a id="fractal-functions-mathematical-origins"></a>**Fractal functions: mathematical origins**
+
+- <a id="ref-f1"></a>**[F1]** Weierstrass function: K. Weierstraß. Über continuirliche Functionen eines reellen Arguments, die für keinen Werth des letzteren einen bestimmten Differentialquotienten besitzen (lecture, 1872). Reprinted in R. Siegmund-Schultze (ed.), *Ausgewählte Kapitel aus der Funktionenlehre*, Teubner-Archiv zur Mathematik 9, Springer, Vienna (1988), pp. 190–193.
+- <a id="ref-f2"></a>**[F2]** Blancmange (Takagi) function: T. Takagi. A Simple Example of the Continuous Function without Derivative. *Proc. Phys.-Math. Soc. Japan Ser. II* (Tokyo Sugaku-Butsurigakkwai Hokoku) **1**, F176–F177 (1903). [doi:10.11429/subutsuhokoku1901.1.F176](https://doi.org/10.11429/subutsuhokoku1901.1.F176)
+- <a id="ref-f3"></a>**[F3]** Weierstrass–Mandelbrot function: M. V. Berry, Z. V. Lewis. On the Weierstrass–Mandelbrot Fractal Function. *Proc. R. Soc. Lond. A* **370**, 459–484 (1980). [doi:10.1098/rspa.1980.0044](https://doi.org/10.1098/rspa.1980.0044)
+- <a id="ref-f4"></a>**[F4]** B. B. Mandelbrot. *The Fractal Geometry of Nature.* W. H. Freeman, San Francisco (1982).
+- <a id="ref-f5"></a>**[F5]** Cantor set and Cantor function: G. Cantor. De la puissance des ensembles parfaits de points. *Acta Mathematica* **4**, 381–392 (1884).
+
+**Software**
+
+- <a id="ref-s1"></a>**[S1]** F. Chollet et al. Keras (2015–). [keras.io](https://keras.io) · [github.com/keras-team/keras](https://github.com/keras-team/keras)
+- <a id="ref-s2"></a>**[S2]** M. Abadi et al. TensorFlow: Large-Scale Machine Learning on Heterogeneous Distributed Systems. arXiv (2016). [arXiv:1603.04467](https://arxiv.org/abs/1603.04467) · [tensorflow.org](https://www.tensorflow.org)
+- <a id="ref-s3"></a>**[S3]** F. Pedregosa et al. Scikit-learn: Machine Learning in Python. *Journal of Machine Learning Research* **12**, 2825–2830 (2011). [jmlr.org/papers/v12/pedregosa11a](https://jmlr.org/papers/v12/pedregosa11a.html)
+- <a id="ref-s4"></a>**[S4]** A. Paszke et al. PyTorch: An Imperative Style, High-Performance Deep Learning Library. *Advances in Neural Information Processing Systems* **32** (NeurIPS 2019), 8024–8035. [arXiv:1912.01703](https://arxiv.org/abs/1912.01703) · [pytorch.org](https://pytorch.org)
+
+**Data**
+
+- <a id="ref-d1"></a>**[D1]** Iris data: R. A. Fisher. The use of multiple measurements in taxonomic problems. *Annals of Eugenics* **7**(2), 179–188 (1936). [doi:10.1111/j.1469-1809.1936.tb02137.x](https://doi.org/10.1111/j.1469-1809.1936.tb02137.x) · OpenML dataset 61: [openml.org/d/61](https://www.openml.org/d/61)
+
+### BibTeX
+
+```bibtex
+@article{herrera2022fractional,
+  author  = {Herrera-Alc{\'a}ntara, Oscar},
+  title   = {Fractional Derivative Gradient-Based Optimizers for Neural Networks and Human Activity Recognition},
+  journal = {Applied Sciences},
+  volume  = {12},
+  number  = {18},
+  pages   = {9264},
+  year    = {2022},
+  doi     = {10.3390/app12189264}
+}
+
+@article{herrera2023pytorch,
+  author  = {Herrera-Alc{\'a}ntara, Oscar and Castel{\'a}n-Aguilar, Josu{\'e} R.},
+  title   = {Fractional Gradient Optimizers for {PyTorch}: Enhancing {GAN} and {BERT}},
+  journal = {Fractal and Fractional},
+  volume  = {7},
+  number  = {7},
+  pages   = {500},
+  year    = {2023},
+  doi     = {10.3390/fractalfract7070500}
+}
+
+@article{chen2024adagl,
+  author  = {Chen, Shuang and Zhang, Changlun and Mu, Haibing},
+  title   = {An Adaptive Learning Rate Deep Learning Optimizer Using Long and Short-Term Gradients Based on {G--L} Fractional-Order Derivative},
+  journal = {Neural Processing Letters},
+  volume  = {56},
+  number  = {2},
+  pages   = {106},
+  year    = {2024},
+  doi     = {10.1007/s11063-024-11571-7}
+}
+
+@article{zhou2023gl,
+  author  = {Zhou, Xiaojun and Zhao, Chunna and Huang, Yaqun},
+  title   = {A Deep Learning Optimizer Based on {Gr{\"u}nwald--Letnikov} Fractional Order Definition},
+  journal = {Mathematics},
+  volume  = {11},
+  number  = {2},
+  pages   = {316},
+  year    = {2023},
+  doi     = {10.3390/math11020316}
+}
+
+@misc{xiang2025aofgd,
+  author       = {Xiang, Kemeng and Zhao, Chunna and Su, Qian and Zhou, Xiaojun and Ye, Junjie and Huang, Yaqun},
+  title        = {{AOFGD}: Adaptive Order Fractional Gradient Descent Method},
+  howpublished = {SSRN preprint, abstract ID 5717167},
+  year         = {2025},
+  doi          = {10.2139/ssrn.5717167}
+}
+
+@misc{chipera2025fractal,
+  author        = {Chipera, Rae and Du, Jenny and Tsapara, Irene},
+  title         = {Fractal and Chaotic Activation Functions in Echo State Networks: Preprocessing Topology Governs the Echo State Property},
+  year          = {2025},
+  eprint        = {2512.14675},
+  archivePrefix = {arXiv}
+}
+
+@article{raubitzek2026fractional,
+  author  = {Raubitzek, Sebastian and Goldenits, Georg and Schrittwieser, Sebastian and K{\"o}nig, Philip and Mallinger, Kevin},
+  title   = {Fractional Optimizers Meet Fractal Activation Functions: An Empirical Study of Multi-Scale Optimization in Neural Networks},
+  journal = {Fractal and Fractional},
+  year    = {2026},
+  note    = {Accepted. Preprint: arXiv:2608.14636. Code: https://github.com/Raubkatz/FractalAndFractional2026}
+}
+
+@article{raubitzek2026fractals,
+  author  = {Raubitzek, Sebastian and Kietreiber, Tobias and Eresheim, Sebastian and Buchelt, Alexander and Mallinger, Kevin},
+  title   = {Fractals in neural networks: Introducing a new class of activation functions},
+  journal = {Communications in Nonlinear Science and Numerical Simulation},
+  volume  = {161},
+  pages   = {110064},
+  year    = {2026},
+  doi     = {10.1016/j.cnsns.2026.110064}
+}
+
+@inproceedings{paszke2019pytorch,
+  author    = {Paszke, Adam and Gross, Sam and Massa, Francisco and Lerer, Adam and Bradbury, James and Chanan, Gregory and Killeen, Trevor and Lin, Zeming and Gimelshein, Natalia and Antiga, Luca and Desmaison, Alban and K{\"o}pf, Andreas and Yang, Edward and DeVito, Zachary and Raison, Martin and Tejani, Alykhan and Chilamkurthy, Sasank and Steiner, Benoit and Fang, Lu and Bai, Junjie and Chintala, Soumith},
+  title     = {{PyTorch}: An Imperative Style, High-Performance Deep Learning Library},
+  booktitle = {Advances in Neural Information Processing Systems 32},
+  pages     = {8024--8035},
+  year      = {2019}
+}
+```
+
+## Citation
+
+Please cite the original publication for every optimizer or activation function used: Herrera-Alcántara [[H1]](#ref-h1), [[H2]](#ref-h2); Chen, Zhang, and Mu [[R1]](#ref-r1); Zhou, Zhao, and Huang [[R2]](#ref-r2); Xiang et al. [[R3]](#ref-r3); and, where Cantor-based activations from the companion repository are used, Chipera, Du, and Tsapara [[C1]](#ref-c1). Cite [[O1]](#ref-o1) for the study's GL-memory and adaptive-memory optimizers and experimental comparison, and [[O2]](#ref-o2) for the fractal activation functions.
+
+**Original experimental repository:** [FractalAndFractional2026](https://github.com/Raubkatz/FractalAndFractional2026)  
+**Updated Keras 3 / PyTorch implementations:** [Fractal_Fractional_Base](https://github.com/Raubkatz/Fractal_Fractional_Base)  
+**Predecessor fractal-activation source:** [Fractal_Activation_Functions](https://github.com/Raubkatz/Fractal_Activation_Functions)
