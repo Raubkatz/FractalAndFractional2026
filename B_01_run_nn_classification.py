@@ -2,83 +2,84 @@
 # -*- coding: utf-8 -*-
 
 """
-run_fractional_optimizer_activation_experiments.py
+B_01_run_nn_classification.py
 
-Self-contained TensorFlow experiment runner for testing:
-    - standard optimizers,
-    - Herrera-style fractional optimizers,
-    - explicit memory-based fractional optimizers,
-across:
-    - standard activations,
-    - fractal activations from the uploaded activation module,
+TensorFlow experiment runner for the neural-network classification experiments
+of the study. It trains the 21 optimizers of the study,
 
-on classification datasets.
+    - standard optimizers: SGD, Adam, RMSprop, Adadelta,
+    - Herrera-type fractional optimizers (class_b),
+    - explicit GL-memory fractional optimizers (class_c),
+    - adaptive memory-based fractional optimizers with convex mixing
+      (class_minimal),
+    - related-work fractional optimizers: AdaGL, FCSGD_GL, FCAdam_GL,
+      AOFGD_SGD, AOFGD_Adam (class_d),
 
-Main design goals
------------------
+with six activation functions,
+
+    - standard: relu, tanh,
+    - fractal (fractal_activation_functions.py): modulated Blancmange curve,
+      decaying cosine, modified Weierstrass-tanh, Weierstrass-Mandelbrot x+sin,
+
+on ten public OpenML classification datasets.
+
+Experimental design
+-------------------
+    datasets         climate-model-simulation-crashes, diabetes, ionosphere,
+                     tic-tac-toe, vertebra-column, glass, iris, seeds,
+                     vehicle, wine
+    settings         four per optimizer: four learning rates for each standard
+                     optimizer (BASELINE_LEARNING_RATE_GRID) and four values of
+                     the order-related parameter for each fractional optimizer
+                     (VDERIV_GRID = [0.75, 1.25, 1.5, 1.75])
+    configurations   21 optimizers x 6 activations x 4 settings = 504 per dataset
+    repetitions      RUNS = 40 seeds, consecutive integers from SEED_VAL
+    training runs    20,160 per dataset, 201,600 over the ten datasets
+
+Each dataset is split once per run into 70 % training and 30 % held-out data,
+with the run seed as random state. The features are MinMax-scaled on the
+training part, and the held-out part serves both as validation data during
+model.fit() and as the test partition. Training runs for the full epoch budget
+of the dataset without early stopping. Hidden width, number of hidden layers,
+batch size and number of epochs are dataset-specific (DATASET_HYPERPARAMS).
+
+Design
+------
 1. No argparse. All settings are defined at the top of the file.
-2. Similar result layout to the uploaded reporting script:
+2. One JSON file per configuration:
        <RESULTS_ROOT>/<dataset>/<config_name>.json
-   where each JSON contains:
-       dataset, optimizer, activation, vderivs, per-run metrics, etc.
-3. Easy activation selection:
-   fractal activations are all listed in one place so they can be commented out.
-4. Includes training and testing wall-clock timing.
-5. Uses a custom training loop so that:
-   - all optimizers are handled consistently.
-6. Intended for classification benchmarks and optimizer/activation interaction studies.
+   Each file contains dataset, optimizer, activation, history size, the
+   per-run metrics in a "vderivs" list, and the per-run training histories.
+3. Activations and optimizers are selected in one place each (section 0).
+4. Training and testing wall-clock times are recorded for every run.
+5. All optimizers share the same network architecture, seed protocol, split
+   and training call (model.fit), so that the comparison isolates optimizer
+   and activation effects.
 
-Why this structure
-------------------
-The uploaded summary script expects one JSON per configuration under
-<root>/<dataset>/*.json, and then extracts:
-    dataset, optimizer, activation, vderiv, runs, accuracy
-from a "vderivs" list. This script writes results in that format so that the
-uploaded summary script can be reused directly afterwards.
+The `vderiv` field of a result file stores the learning rate for the standard
+optimizers, the fractional order nu for the Herrera, GL-Memory and
+Adaptive-Memory optimizers, alpha for AdaGL, FCSGD_GL and FCAdam_GL, and the
+initial order alpha_init for AOFGD_SGD and AOFGD_Adam.
 
-Uploaded sources used as design reference
------------------------------------------
-- The report script expects JSON files in <SOURCE_DIR>/<dataset>/*.json and
-  computes summaries over fields including dataset, optimizer, activation,
-  vderiv, and per-run accuracy results.
-- The uploaded fractal activation module exposes several fractal activation
-  functions such as modulated Blancmange, modified Weierstrass, and
-  Weierstrass-Mandelbrot variants.
-- The uploaded optimizer modules provide:
-    * Herrera-style fractional optimizers (class_b),
-    * memory-based fractional optimizers (class_c),
-    * adaptive memory-based fractional optimizers with convex mixing (class_minimal),
-    * related-work fractional optimizers: AdaGL, FCSGD_GL, FCAdam_GL,
-      AOFGD_SGD, AOFGD_Adam (class_d).
+Recorded per run
+----------------
+Accuracy, macro F1, macro precision, macro recall, test loss, best training
+accuracy, training time, test time, number of completed epochs, best
+validation loss, and the per-epoch training history.
 
-Experimental questions this script supports
--------------------------------------------
-1. Do fractional optimizers improve classification performance relative to
-   standard baselines?
-2. Do fractal activations interact differently with:
-   - classical optimizers,
-   - Herrera-style fractional optimizers,
-   - explicit memory-based fractional optimizers,
-   - adaptive memory-based fractional optimizers (class_minimal),
-   - related-work fractional optimizers (AdaGL, FCSGD_GL, FCAdam_GL,
-     AOFGD_SGD, AOFGD_Adam)?
-3. What is the computational overhead in training and evaluation time?
-
-Recommended workflow
---------------------
-1. Edit the parameter block at the top.
-2. Run the script.
-3. Reuse the uploaded summary script on the results folder to create
-   text reports of average accuracy, standard deviation, max, and min.
+Workflow
+--------
+1. Check the settings in section 0.
+2. Run this script:
+       python3 B_01_run_nn_classification.py
+3. Analyze the results with B_02_analyze_neural_network_experiments.py, which
+   reads <RESULTS_ROOT>/<dataset>/*.json.
 
 Notes
 -----
-- This script uses scikit-learn tabular datasets by default so it is
-  immediately runnable without additional local data files.
-- If you want to plug in your exact previous datasets, edit `load_dataset()`.
-- The script uses one common MLP backbone to isolate optimizer / activation effects.
-- For fairness, all compared optimizers share the same network architecture,
-  seed protocol, split sizes, and training loop.
+- The datasets are fetched from OpenML by name (version 1) in load_dataset().
+- The dataset-specific architectures follow the predecessor activation study,
+  Raubitzek et al., Commun Nonlinear Sci Numer Simulat (2026), Table 1.
 """
 
 from __future__ import annotations
@@ -108,10 +109,9 @@ from numpy.random import seed
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
 # ---------------------------------------------------------------------
-# IMPORT UPLOADED OPTIMIZER AND ACTIVATION MODULES
+# OPTIMIZER AND ACTIVATION MODULES OF THE STUDY
 # ---------------------------------------------------------------------
-# Adjust these import names if your local filenames differ.
-# They are aligned with the uploaded files referenced in this conversation.
+# The modules are expected in the same directory as this script.
 from class_b_tf_fractional_optimizers_OHA import (
     FSGD,
     FAdam,
@@ -152,12 +152,13 @@ import fractal_activation_functions as faf
 GLOBAL_SEED = 238974
 SEED_VAL = 238974
 RUNS = 40
-RUN_SEEDS = list(range(SEED_VAL, SEED_VAL + RUNS))   # same run-number protocol as the older implementation
+RUN_SEEDS = list(range(SEED_VAL, SEED_VAL + RUNS))   # 40 consecutive run seeds, one per repetition
 
 # -----------------------------
-# Output folders
+# Output folders. RESULTS_ROOT is the input folder of
+# B_02_analyze_neural_network_experiments.py.
 # -----------------------------
-RESULTS_ROOT = Path(f"final_results_classificaiton_experiments_40runs")
+RESULTS_ROOT = Path(f"compiled_results_all_experiments")
 HISTORY_ROOT = RESULTS_ROOT / "histories"
 MODEL_ROOT = RESULTS_ROOT / "saved_models"  # optional; set SAVE_MODELS=False if not needed
 
@@ -168,11 +169,8 @@ SAVE_PER_RUN_PREDICTIONS = False
 # -----------------------------
 # Datasets to test
 # -----------------------------
-# Built-in tabular classification datasets for a self-contained experiment.
-# Replace or extend this list in `load_dataset()` if you want your earlier datasets.
-#
-# Extended to the ten public OpenML classification datasets used in
-# Raubitzek et al., "Fractals in neural networks: Introducing a new class
+# The ten public OpenML classification datasets of the predecessor activation
+# study, Raubitzek et al., "Fractals in neural networks: Introducing a new class
 # of activation functions" (Commun Nonlinear Sci Numer Simulat, 2026),
 # Table 1. Dataset-specific architecture/training hyperparameters (hidden
 # width n, number of hidden layers, batch size, epochs) are defined in
@@ -210,6 +208,7 @@ DATASETS_TO_RUN = [
 #   seeds                              multi-class  64   2               32     30
 #   vehicle                            multi-class  128  2               32     25
 #   wine                               multi-class  64   2               32     30
+
 DATASET_HYPERPARAMS: Dict[str, Dict[str, Any]] = {
     "climate-model-simulation-crashes": {"task": "binary",      "n": 32,  "hidden_layers": 1, "batch_size": 32, "epochs": 30},
     "diabetes":                          {"task": "binary",      "n": 64,  "hidden_layers": 1, "batch_size": 32, "epochs": 30},
@@ -255,6 +254,7 @@ def get_dataset_epochs(dataset_name: str) -> int:
 # -----------------------------
 # Maps dataset key (as used in DATASETS_TO_RUN) -> (openml numeric id, description).
 # IDs follow Raubitzek et al. (2026), Section 3, dataset descriptions.
+# Reference list only; load_dataset() fetches each dataset by its name.
 _OPENML_REGISTRY: Dict[str, Tuple[int, str]] = {
     "climate-model-simulation-crashes": (1467, "climate-model-simulation-crashes"),
     "diabetes":                         (37,   "diabetes"),
@@ -275,9 +275,10 @@ _OPENML_CACHE: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
 
 def encode_non_numeric_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Encode non-numeric feature columns exactly in the style of the older
-    activation-only implementation: each categorical/object value is mapped to
-    idx / (number_of_unique_values - 1).
+    Encode non-numeric feature columns as in the predecessor activation study:
+    each categorical/object value is mapped to idx / (number_of_unique_values - 1),
+    with the values enumerated in order of first appearance; a column with a
+    single value is mapped to 0.
     """
     for column in df.select_dtypes(include=["object", "category"]).columns:
         unique_values = df[column].unique()
@@ -294,7 +295,7 @@ def encode_non_numeric_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def split_scale(X: np.ndarray, y: np.ndarray, n: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Split and scale exactly like the older implementation:
+    Split and scale as in the predecessor activation study:
         - train_test_split(..., test_size=0.3, random_state=n, shuffle=True)
         - MinMaxScaler(feature_range=(0, 1))
         - no separate validation split
@@ -314,12 +315,15 @@ def split_scale(X: np.ndarray, y: np.ndarray, n: int) -> Tuple[np.ndarray, np.nd
 # Train/test split
 # -----------------------------
 TEST_SIZE = 0.30
-VAL_SIZE_WITHIN_TRAIN = None  # kept only for result metadata compatibility; the older implementation has no validation split
+VAL_SIZE_WITHIN_TRAIN = None  # no separate validation split; the held-out partition is also the validation data
 
 # -----------------------------
 # Training hyperparameters
 # -----------------------------
-EPOCHS = 40 #usually 40
+# EPOCHS and BATCH_SIZE are fallbacks for datasets without an entry in
+# DATASET_HYPERPARAMS. Training runs for the full epoch budget without early
+# stopping; EARLY_STOPPING_PATIENCE and SHUFFLE_EACH_EPOCH are not used.
+EPOCHS = 40
 BATCH_SIZE = 64
 EARLY_STOPPING_PATIENCE = 8
 SHUFFLE_EACH_EPOCH = True
@@ -327,6 +331,10 @@ SHUFFLE_EACH_EPOCH = True
 # -----------------------------
 # Network architecture
 # -----------------------------
+# HIDDEN_UNITS is the fallback for datasets without an entry in
+# DATASET_HYPERPARAMS. The architectures are defined in binary_model() and
+# groups_model() (batch normalization and dropout 0.2 in the multi-class
+# networks only); DROPOUT_RATE and USE_BATCH_NORM are not used.
 HIDDEN_UNITS = [128, 64]
 DROPOUT_RATE = 0.10
 USE_BATCH_NORM = False
@@ -334,13 +342,13 @@ USE_BATCH_NORM = False
 # -----------------------------
 # Activation selection
 # -----------------------------
-# Standard activations used in the final experimental suite
+# Standard activations of the study
 STANDARD_ACTIVATIONS = {
     "relu": tf.nn.relu,
     "tanh": tf.nn.tanh,
 }
 
-# Fractal activations used in the final experimental suite
+# Fractal activations of the study
 FRACTAL_ACTIVATIONS = {
     "modulated_blancmange_curve":         faf.modulated_blancmange_curve,
     "decaying_cosine_function_tf":        faf.decaying_cosine_function_tf,
@@ -407,22 +415,39 @@ INCLUDE_RELATED_WORK_OPTIMIZERS = True
 # -----------------------------
 # Fractional parameter grids
 # -----------------------------
-# For standard non-fractional optimizers, vderiv is fixed to 1.0.
-#VDERIV_GRID = [float(v) for v in np.round(np.arange(0.1, 2.0, 0.1), decimals=1)]
-VDERIV_GRID = [0.75, 1.25, 1.5]
+# Common grid of the order-related parameter of the fractional optimizers: the
+# fractional order nu (Herrera, GL-Memory, Adaptive-Memory), alpha (AdaGL,
+# FCSGD_GL, FCAdam_GL) or the initial order alpha_init (AOFGD_SGD, AOFGD_Adam).
+# For the standard optimizers the `vderiv` field stores the learning rate
+# instead (BASELINE_LEARNING_RATE_GRID).
+VDERIV_GRID = [0.75, 1.25, 1.5, 1.75]
 HERRERA_VDERIVS = VDERIV_GRID
 MEMORY_VDERIVS = VDERIV_GRID
-MEMORY_HISTORY_SIZES = [6]  # you can expand to [4, 6, 8, 10]
+MEMORY_HISTORY_SIZES = [6]  # history length K of the GL-Memory group
 MEMORY_NORMALIZE_COEFFS = False
 
 
 # -----------------------------
 # Learning rates and optimizer-specific defaults
 # -----------------------------
+# Reference learning rates of the base optimizer families. Each fractional
+# optimizer uses the reference learning rate of its base optimizer.
 LR_SGD = 1e-2
 LR_ADAM = 1e-3
 LR_RMSPROP = 1e-3
 LR_ADADELTA = 1.0
+
+# Four candidate learning rates per standard optimizer, so that the standard
+# optimizers contribute as many configurations per optimizer as the fractional
+# optimizers contribute order settings. The tested learning rate is stored in
+# the `vderiv` field of the result files for the standard optimizers; for the
+# fractional optimizers `vderiv` is the fractional order, alpha or alpha_init.
+BASELINE_LEARNING_RATE_GRID = {
+    "SGD":      [5e-3, 1e-2, 2e-2, 4e-2],
+    "Adam":     [5e-4, 1e-3, 2e-3, 4e-3],
+    "RMSprop":  [5e-4, 1e-3, 2e-3, 4e-3],
+    "Adadelta": [5e-1, 1.0, 2.0, 4.0],
+}
 
 SGD_MOMENTUM = 0.9
 SGD_NESTEROV = False
@@ -445,7 +470,10 @@ HERRERA_FRAC_EPSILON = 1e-6
 # -----------------------------
 # Adaptive memory optimizer defaults (class_minimal)
 # -----------------------------
-MINIMAL_ADAPTIVE_VDERIV = 1.25
+# The adaptive-memory family is swept over the same fractional orders as the
+# other fractional families, so that every family contributes the same number
+# of configurations per optimizer.
+MINIMAL_ADAPTIVE_VDERIVS = VDERIV_GRID
 MINIMAL_ADAPTIVE_HISTORY_SIZE = 4
 MINIMAL_ADAPTIVE_NORMALIZE_COEFFS = True
 MINIMAL_ADAPTIVE_INITIAL_MIX = 0.10
@@ -466,17 +494,23 @@ MINIMAL_ADAPTIVE_WARMUP_STEPS = 0
 # -----------------------------
 # Related-work optimizer defaults (class_d)
 # -----------------------------
+# ADAGL_ALPHA, FCGL_ALPHA and AOFGD_ALPHA_INIT are single default values and are
+# not used here; the swept grids are ADAGL_ALPHAS, FCGL_ALPHAS and
+# AOFGD_ALPHA_INITS.
 # AdaGL (Chen, Zhang & Mu, 2024)
 ADAGL_ALPHA = 0.9
+ADAGL_ALPHAS = VDERIV_GRID
 ADAGL_HISTORY_SIZE = 10
 
 # FCSGD_GL / FCAdam_GL (Zhou, Zhao & Huang, 2023)
 FCGL_ALPHA = 0.9
-FCGL_HISTORY_SIZE = 11          # 11 slots = 1 current + 10 historical, matching paper Eq. 10
+FCGL_ALPHAS = VDERIV_GRID
+FCGL_HISTORY_SIZE = 11          # 11 slots = 1 current + 10 historical, Eq. 10 of Zhou et al. (2023)
 FCGL_PERTURBATION_PROB = 0.5
 
 # AOFGD (Xiang et al., 2025)
 AOFGD_ALPHA_INIT = 0.9
+AOFGD_ALPHA_INITS = VDERIV_GRID
 AOFGD_ALPHA_MIN = 0.5
 AOFGD_ALPHA_MAX = 1.5
 AOFGD_DELTA_ALPHA = 0.02
@@ -512,7 +546,7 @@ def set_global_seed(seed: int) -> None:
 
 def load_dataset(dataset_name: str) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Load datasets exactly in the style of the older activation-only script:
+    Load a dataset from OpenML by name:
         fetch_openml(name=data_name, version=1, as_frame=True, parser="auto")
     followed by manual feature encoding and LabelEncoder target encoding.
     """
@@ -546,7 +580,7 @@ def prepare_dataset(
     seed: int,
 ) -> Dict[str, Any]:
     """
-    Prepare the dataset according to the older implementation:
+    Prepare the dataset of one run:
         - load OpenML by dataset name,
         - split once into train/test with test_size=0.3,
         - MinMax-scale features using the train split only,
@@ -585,7 +619,7 @@ def binary_model(
     activation: Callable[[tf.Tensor], tf.Tensor],
 ) -> tf.keras.Model:
     """
-    Binary-classification model from the older activation-only implementation.
+    Binary-classification model of the predecessor activation study.
 
     Architecture:
         Dense(neurons, activation=activation, GlorotUniform(seed=42), input_dim=n_features)
@@ -617,7 +651,7 @@ def groups_model(
     activation: Callable[[tf.Tensor], tf.Tensor],
 ) -> tf.keras.Model:
     """
-    Multi-class model from the older activation-only implementation.
+    Multi-class model of the predecessor activation study.
 
     Architecture:
         Dense(neurons, activation=activation, GlorotUniform(seed=42), input_dim=n_features)
@@ -664,12 +698,12 @@ def build_mlp(
     hidden_units: Optional[List[int]] = None,
 ) -> tf.keras.Model:
     """
-    Compatibility wrapper used by the newer optimizer/activation pipeline.
+    Build the network of a dataset.
 
-    The actual architecture follows the older implementation exactly:
+    The architecture depends on the task:
         - binary tasks: binary_model(...)
         - multi-class tasks: groups_model(...)
-    The first value of hidden_units is interpreted as the old `neurons` value.
+    The first value of hidden_units is the width n (`neurons`).
     """
     if hidden_units is None:
         hidden_units = HIDDEN_UNITS
@@ -704,14 +738,14 @@ def build_optimizer(
     # -----------------------------
     if optimizer_name == "SGD":
         return tf.keras.optimizers.SGD(
-            lr=LR_SGD,
+            lr=float(vderiv),
             momentum=SGD_MOMENTUM,
             nesterov=SGD_NESTEROV,
         )
 
     if optimizer_name == "Adam":
         return tf.keras.optimizers.Adam(
-            lr=LR_ADAM,
+            lr=float(vderiv),
             beta_1=ADAM_BETA_1,
             beta_2=ADAM_BETA_2,
             epsilon=ADAM_EPSILON,
@@ -720,7 +754,7 @@ def build_optimizer(
 
     if optimizer_name == "RMSprop":
         return tf.keras.optimizers.RMSprop(
-            lr=LR_RMSPROP,
+            lr=float(vderiv),
             rho=RMSPROP_RHO,
             momentum=RMSPROP_MOMENTUM,
             epsilon=ADAM_EPSILON,
@@ -729,7 +763,7 @@ def build_optimizer(
 
     if optimizer_name == "Adadelta":
         return tf.keras.optimizers.Adadelta(
-            lr=LR_ADADELTA,
+            lr=float(vderiv),
             rho=ADADELTA_RHO,
             epsilon=ADADELTA_EPSILON,
         )
@@ -834,7 +868,7 @@ def build_optimizer(
             lr=LR_SGD,
             momentum=SGD_MOMENTUM,
             nesterov=SGD_NESTEROV,
-            vderiv=MINIMAL_ADAPTIVE_VDERIV,
+            vderiv=vderiv,
             history_size=MINIMAL_ADAPTIVE_HISTORY_SIZE,
             normalize_coefficients=MINIMAL_ADAPTIVE_NORMALIZE_COEFFS,
             initial_mix=MINIMAL_ADAPTIVE_INITIAL_MIX,
@@ -860,7 +894,7 @@ def build_optimizer(
             momentum=RMSPROP_MOMENTUM,
             epsilon=ADAM_EPSILON,
             centered=RMSPROP_CENTERED,
-            vderiv=MINIMAL_ADAPTIVE_VDERIV,
+            vderiv=vderiv,
             history_size=MINIMAL_ADAPTIVE_HISTORY_SIZE,
             normalize_coefficients=MINIMAL_ADAPTIVE_NORMALIZE_COEFFS,
             initial_mix=MINIMAL_ADAPTIVE_INITIAL_MIX,
@@ -886,7 +920,7 @@ def build_optimizer(
             beta_2=ADAM_BETA_2,
             epsilon=ADAM_EPSILON,
             amsgrad=ADAM_AMSGRAD,
-            vderiv=MINIMAL_ADAPTIVE_VDERIV,
+            vderiv=vderiv,
             history_size=MINIMAL_ADAPTIVE_HISTORY_SIZE,
             normalize_coefficients=MINIMAL_ADAPTIVE_NORMALIZE_COEFFS,
             initial_mix=MINIMAL_ADAPTIVE_INITIAL_MIX,
@@ -910,7 +944,7 @@ def build_optimizer(
             lr=LR_ADADELTA,
             rho=ADADELTA_RHO,
             epsilon=ADADELTA_EPSILON,
-            vderiv=MINIMAL_ADAPTIVE_VDERIV,
+            vderiv=vderiv,
             history_size=MINIMAL_ADAPTIVE_HISTORY_SIZE,
             normalize_coefficients=MINIMAL_ADAPTIVE_NORMALIZE_COEFFS,
             initial_mix=MINIMAL_ADAPTIVE_INITIAL_MIX,
@@ -935,7 +969,7 @@ def build_optimizer(
     if optimizer_name == "AdaGL":
         return AdaGL(
             lr=LR_ADAM,
-            alpha=ADAGL_ALPHA,
+            alpha=vderiv,
             history_size=ADAGL_HISTORY_SIZE,
             beta_1=ADAM_BETA_1,
             beta_2=ADAM_BETA_2,
@@ -948,7 +982,7 @@ def build_optimizer(
             lr=LR_SGD,
             momentum=SGD_MOMENTUM,
             nesterov=SGD_NESTEROV,
-            alpha=FCGL_ALPHA,
+            alpha=vderiv,
             history_size=FCGL_HISTORY_SIZE,
             perturbation_prob=FCGL_PERTURBATION_PROB,
         )
@@ -960,7 +994,7 @@ def build_optimizer(
             beta_2=ADAM_BETA_2,
             epsilon=ADAM_EPSILON,
             amsgrad=ADAM_AMSGRAD,
-            alpha=FCGL_ALPHA,
+            alpha=vderiv,
             history_size=FCGL_HISTORY_SIZE,
             perturbation_prob=FCGL_PERTURBATION_PROB,
         )
@@ -970,9 +1004,12 @@ def build_optimizer(
             lr=LR_SGD,
             momentum=SGD_MOMENTUM,
             nesterov=SGD_NESTEROV,
-            alpha_init=AOFGD_ALPHA_INIT,
+            alpha_init=vderiv,
             alpha_min=AOFGD_ALPHA_MIN,
-            alpha_max=AOFGD_ALPHA_MAX,
+            # AOFGD requires alpha_init <= alpha_max < 2. The upper bound is
+            # max(AOFGD_ALPHA_MAX, alpha_init), so it is enlarged only for an
+            # initial order above 1.5 (alpha_init = 1.75).
+            alpha_max=max(AOFGD_ALPHA_MAX, float(vderiv)),
             delta_alpha=AOFGD_DELTA_ALPHA,
             cef_threshold=AOFGD_CEF_THRESHOLD,
             ema_gamma=AOFGD_EMA_GAMMA,
@@ -987,9 +1024,12 @@ def build_optimizer(
             beta_2=ADAM_BETA_2,
             epsilon=ADAM_EPSILON,
             amsgrad=ADAM_AMSGRAD,
-            alpha_init=AOFGD_ALPHA_INIT,
+            alpha_init=vderiv,
             alpha_min=AOFGD_ALPHA_MIN,
-            alpha_max=AOFGD_ALPHA_MAX,
+            # AOFGD requires alpha_init <= alpha_max < 2. The upper bound is
+            # max(AOFGD_ALPHA_MAX, alpha_init), so it is enlarged only for an
+            # initial order above 1.5 (alpha_init = 1.75).
+            alpha_max=max(AOFGD_ALPHA_MAX, float(vderiv)),
             delta_alpha=AOFGD_DELTA_ALPHA,
             cef_threshold=AOFGD_CEF_THRESHOLD,
             ema_gamma=AOFGD_EMA_GAMMA,
@@ -1009,7 +1049,7 @@ LOSS_FN = tf.keras.losses.SparseCategoricalCrossentropy()
 
 def calculate_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
     """
-    Metric calculation from the older implementation.
+    Accuracy and macro-averaged precision, recall and F1.
     """
     metrics = {
         "accuracy": accuracy_score(y_true, y_pred),
@@ -1027,7 +1067,7 @@ def evaluate_model(
     batch_size: int,
 ) -> Dict[str, Any]:
     """
-    Evaluation follows the older implementation:
+    Evaluation:
         - model.evaluate(X_test, y_test)
         - model.predict(X_test)
         - np.argmax predictions
@@ -1068,10 +1108,9 @@ def train_one_run(
     epochs: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
-    Train one run using the older activation-only training setup while keeping
-    the newer optimizer/activation experiment pipeline.
+    Train one run with the training setup of the predecessor activation study.
 
-    Older setup reproduced here:
+    Setup:
         - tf.keras.backend.clear_session() before each run,
         - model built with fixed GlorotUniform(seed=42),
         - train/test split by run number,
@@ -1202,16 +1241,19 @@ def build_experiment_plan() -> List[Dict[str, Any]]:
         # Standard baselines
         if INCLUDE_BASELINE_OPTIMIZERS:
             for opt_name in BASELINE_OPTIMIZERS:
-                configs.append(
-                    {
-                        "optimizer_name": opt_name,
-                        "activation_name": activation_name,
-                        "vderiv": 1.0,
-                        "history_size": None,
-                        "adaptation_mode": None,
-                        "schedule_type": None,
-                    }
-                )
+                for learning_rate in BASELINE_LEARNING_RATE_GRID[opt_name]:
+                    configs.append(
+                        {
+                            "optimizer_name": opt_name,
+                            "activation_name": activation_name,
+                            # For standard optimizers, the learning rate is
+                            # stored in the `vderiv` field.
+                            "vderiv": float(learning_rate),
+                            "history_size": None,
+                            "adaptation_mode": None,
+                            "schedule_type": None,
+                        }
+                    )
 
         # Herrera-style
         if INCLUDE_HERRERA_OPTIMIZERS:
@@ -1245,34 +1287,50 @@ def build_experiment_plan() -> List[Dict[str, Any]]:
                         )
 
         # Adaptive memory-based fractional (class_minimal)
-        # These use fixed internal hyperparameters; vderiv is a placeholder (ignored).
+        # Swept over the same fractional-order grid as the other fractional
+        # families. `vderiv` is the order passed to the optimizer, so the order
+        # written into the result file and into its filename is the order the
+        # optimizer ran with.
         if INCLUDE_ADAPTIVE_MEMORY_OPTIMIZERS:
             for opt_name in ADAPTIVE_MEMORY_OPTIMIZERS:
-                configs.append(
-                    {
-                        "optimizer_name": opt_name,
-                        "activation_name": activation_name,
-                        "vderiv": 1.0,
-                        "history_size": None,
-                        "adaptation_mode": None,
-                        "schedule_type": None,
-                    }
-                )
+                for vderiv in MINIMAL_ADAPTIVE_VDERIVS:
+                    configs.append(
+                        {
+                            "optimizer_name": opt_name,
+                            "activation_name": activation_name,
+                            "vderiv": float(vderiv),
+                            "history_size": None,
+                            "adaptation_mode": None,
+                            "schedule_type": None,
+                        }
+                    )
 
         # Related-work fractional optimizers (class_d)
-        # These use fixed internal hyperparameters; vderiv is a placeholder (ignored).
+        # Use the same order grid as the other fractional optimizer families.
+        # For AdaGL / FCSGD_GL / FCAdam_GL, vderiv stores alpha.
+        # For AOFGD_SGD / AOFGD_Adam, vderiv stores alpha_init.
         if INCLUDE_RELATED_WORK_OPTIMIZERS:
             for opt_name in RELATED_WORK_OPTIMIZERS:
-                configs.append(
-                    {
-                        "optimizer_name": opt_name,
-                        "activation_name": activation_name,
-                        "vderiv": 1.0,
-                        "history_size": None,
-                        "adaptation_mode": None,
-                        "schedule_type": None,
-                    }
-                )
+                if opt_name == "AdaGL":
+                    alpha_grid = ADAGL_ALPHAS
+                elif opt_name in {"FCSGD_GL", "FCAdam_GL"}:
+                    alpha_grid = FCGL_ALPHAS
+                elif opt_name in {"AOFGD_SGD", "AOFGD_Adam"}:
+                    alpha_grid = AOFGD_ALPHA_INITS
+                else:
+                    raise ValueError(f"Unknown related-work optimizer: {opt_name}")
+
+                for alpha_value in alpha_grid:
+                    configs.append(
+                        {
+                            "optimizer_name": opt_name,
+                            "activation_name": activation_name,
+                            "vderiv": float(alpha_value),
+                            "history_size": None,
+                            "adaptation_mode": None,
+                            "schedule_type": None,
+                        }
+                    )
 
     return configs
 
@@ -1318,15 +1376,15 @@ def write_result_json(
     run_results: List[Dict[str, Any]],
 ) -> None:
     """
-    Write one JSON file per configuration in a structure compatible with the
-    uploaded report script.
+    Write one JSON file per configuration in the structure read by
+    B_02_analyze_neural_network_experiments.py.
     """
     out_dir = RESULTS_ROOT / dataset_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     run_summary = summarize_runs(run_results)
 
-    # Keep the report-compatible schema:
+    # Result schema read by the analysis script:
     # data["vderivs"] -> list of objects with vderiv and results
     payload = {
         "dataset": dataset_name,

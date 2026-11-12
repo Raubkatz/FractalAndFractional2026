@@ -5,23 +5,16 @@
 B_04_activation_comparison_diagnostics.py
 
 Numerical diagnostic of all six activation functions used in the
-classification experiments, written for the supplementary appendix and in
-response to the reviewer request for a check on the numerical sensitivity of
-the high-frequency activation:
+classification experiments. It checks whether the behaviour of the fractal
+activations, in particular of the high-frequency Weierstrass-Mandelbrot x+sin
+activation, is sensitive to unresolved high-frequency components, using
+several truncation lengths (including 8, 16 and 24 terms) together with
+gradient-magnitude and non-finite-value diagnostics.
 
-    "The revised discussion of the Weierstrass-Mandelbrot activation would
-     benefit from a brief additional numerical check. A limited comparison
-     using a few truncation lengths, such as 8, 16, and 24 terms, together
-     with simple gradient-magnitude and non-finite-value diagnostics, could
-     help determine whether the reported behaviour is sensitive to unresolved
-     high-frequency components."
-
-The predecessor of this script, B_03_activation_truncation_sensitivity.py,
-answered that question for the x+sin activation alone. This script runs the
-same measurements for every activation of the study, so that the behaviour of
-the x+sin variant can be stated as a comparison rather than as an isolated
-observation, and so that the appendix can show what the other three fractal
-activations do differently.
+The same measurements are run for every activation of the study, so that the
+behaviour of the x+sin variant can be stated as a comparison rather than as an
+isolated observation, and so that the differences between the four fractal
+activations become visible.
 
 THE SIX ACTIVATIONS
 -------------------
@@ -54,8 +47,8 @@ WHAT THIS SCRIPT MEASURES
        counts, for float32 and float64 pre-activations.
 
     2) Truncation sweep. Each series activation is evaluated over a grid of
-       truncation lengths that includes the lengths named in the review, 8, 16
-       and 24 terms, and its own deployed length. Reported per truncation: the
+       truncation lengths that includes the short lengths 8, 16 and 24
+       terms, and its own deployed length. Reported per truncation: the
        deviation of the value from the deployed truncation, the derivative
        statistics, the non-finite counts, and the closed-form derivative
        amplitude bound.
@@ -92,8 +85,8 @@ WHAT THIS SCRIPT MEASURES
     the numpy reference is cross-checked against the deployed implementation
     and its automatic derivative.
 
-WHY THIS COMPARISON IS THE POINT
---------------------------------
+BACKGROUND
+----------
 A fractal activation is usually described by the regularity of its limit. That
 description says nothing about what a network trained on it actually receives,
 because training consumes the derivative of a truncated sum evaluated in finite
@@ -122,12 +115,11 @@ rounding rather than of the input. The modified Weierstrass-tanh activation
 uses b = 1.5, which is not a power of two, and therefore does not show the
 lattice degeneracy at all.
 
-The outcome, which the report states with the measured numbers, is that no
-activation produces a single non-finite value or derivative, that every value
-series is converged well before its deployed truncation, and that the four
-fractal activations nevertheless differ by fourteen orders of magnitude in the
-gradient they supply, with only the x+sin variant supplying a gradient that
-bears no relation to the slope of the function it computes.
+The report states the measured outcome: the non-finite counts of every
+activation, the truncation at which each value series has converged relative
+to its deployed truncation, the spread of the derivative magnitudes across the
+four fractal activations, and whether the gradient each activation supplies
+describes the slope of the function it computes.
 
 RUNNING
 -------
@@ -212,7 +204,7 @@ XPSIN_NUM_TERMS = 100
 # -----------------------------------------------------------------------------
 # Truncation grid. Each activation is swept over the entries of this grid that
 # do not exceed its deployed number of terms, plus its deployed number itself.
-# The first three entries are the lengths named in the review.
+# The first three entries are the short lengths 8, 16 and 24 terms.
 TRUNCATION_GRID = [8, 16, 24, 32, 50, 75, 100]
 INCLUDE_SHORT_TRUNCATION = 4
 
@@ -284,8 +276,9 @@ AUTODIFF_CROSSCHECK_TRUNCATIONS = [8, 16, 24]
 
 # -----------------------------------------------------------------------------
 # Compact network probe. Deliberately small: one dataset, a few seeds, the
-# truncations named in the review plus the deployed one. Hyperparameters follow
-# Table 1 of the study for the chosen dataset.
+# truncations of NETWORK_PROBE_TRUNCATIONS plus the deployed one. Hyperparameters
+# follow DATASET_HYPERPARAMS of B_01_run_nn_classification.py for the chosen
+# dataset.
 NETWORK_PROBE_ENABLED = True
 NETWORK_PROBE_DATASET = "seeds"
 NETWORK_PROBE_TRUNCATIONS = [8, 16, 24]
@@ -2197,7 +2190,7 @@ class NetworkGradientProbe:
 
 class ComparisonPlotter:
     """
-    Figures for the supplementary appendix.
+    Figures of the activation diagnostics.
 
     One colour and one marker per activation, kept across every figure, the
     same ordering everywhere, logarithmic axes wherever the quantities span

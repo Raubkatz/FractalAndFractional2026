@@ -3,10 +3,11 @@
 """
 D_01_memory_degeneracy_kernel_analysis.py
 
-Analytic / kernel-level analysis of the memory-fractional gradient pipeline,
-written to answer the reviewer concern about a degeneracy of the
-adaptive-memory construction in the regime the controller treats as
-favourable to memory.
+Analytic / kernel-level analysis of the memory-fractional gradient pipeline.
+It characterizes the degeneracy of the memory construction in the regime that
+the adaptive controller treats as favourable to memory, and reproduces the
+tables and figures of the appendix on the response of the truncated memory
+kernel.
 
 Scope
 -----
@@ -26,7 +27,7 @@ class_minimal_fractional_adaptive_optimizers.py (AdaptiveMemoryF*).
 Parameter grid
 --------------
 The orders, memory lengths and controller settings below are those of the
-current manuscript. Both experimental stages sweep the same four
+article. Both experimental stages sweep the same four
 order-related values,
 
     nu (Herrera, GL-Memory, Adaptive-Memory)  in {0.75, 1.25, 1.50, 1.75}
@@ -36,18 +37,16 @@ order-related values,
 
 with K = 6 unnormalised for the GL-Memory group, K = 4 normalised for the
 Adaptive-Memory group, K = 10 for AdaGL and K = 11 with Bernoulli retention
-p = 0.5 for the FCGL methods. The earlier single-setting-per-stage list
-(nu = 1.25 for the networks, nu = 0.90 for the surfaces) is superseded: the
-same grid is used in both stages, so every order is now analysed once rather
-than per stage.
+p = 0.5 for the FCGL methods. The same grid is used in both stages, so every
+order is analysed once.
 
 What it establishes
 -------------------
 (A) The coefficient table and DC gain for every (nu, K, normalisation)
-    combination used anywhere in the article, reproducing the reviewer's
-    numbers. For the FCGL methods the DC gain is reported both for the full
-    kernel and in expectation under the Bernoulli history mask, which is the
-    quantity that governs their steady-state response.
+    combination used in the article. For the FCGL methods the DC gain is
+    reported both for the full kernel and in expectation under the Bernoulli
+    history mask, which is the quantity that governs their steady-state
+    response.
 
 (B) A closed-form result for the persistent-gradient limit
     g_{t-k} -> g for all k:
@@ -132,7 +131,7 @@ COLOR_PALETTE_A = [
 PLOT_DPI = 180
 
 # Controller settings of the adaptive-memory family, as listed in the
-# hyperparameter appendix of the manuscript.
+# hyperparameter appendix of the article.
 STABILITY_THRESHOLD = 0.25
 LAMBDA_MIN, LAMBDA_MAX = 0.0, 0.30
 LAMBDA_INIT = 0.10
@@ -147,7 +146,7 @@ WARMUP_STEPS = 0
 
 # ---------------------------------------------------------------------------
 # The parameter grid of the article. Both stages sweep the same four
-# order-related values, so there is one grid rather than one setting per stage.
+# order-related values, so one grid serves both stages.
 # ---------------------------------------------------------------------------
 ORDER_GRID: Tuple[float, ...] = (0.75, 1.25, 1.50, 1.75)
 
@@ -881,9 +880,11 @@ def figure_herrera_factor_vs_order() -> None:
     ax.axhline(1.0, color="black", linewidth=1.0)
     ax.set_xlabel(r"$|\theta|$")
     ax.set_ylabel(r"$f_\nu(\theta)=|\theta+\varepsilon|^{1-\nu}/\Gamma(2-\nu)$")
-    ax.set_title("Herrera-type scaling factor over the evaluated order grid\n"
-                 rf"($\varepsilon={HERRERA_FRAC_EPSILON:g}$; the horizontal "
-                 "line is the classical factor at $\nu=1$)")
+    ax.set_title(
+        "Herrera-type scaling factor over the evaluated order grid\n"
+        rf"($\varepsilon={HERRERA_FRAC_EPSILON:g}$; the horizontal "
+        r"line is the classical factor at $\nu=1$)"
+    )
     ax.grid(True, alpha=0.3, which="both")
     ax.legend(fontsize=9)
     _save(fig, FIG_DIR / "herrera_factor_vs_order")

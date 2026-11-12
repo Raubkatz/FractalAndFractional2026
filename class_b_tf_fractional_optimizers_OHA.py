@@ -1,23 +1,17 @@
 """
-fractional_herrera_optimizers_legacy.py
+class_b_tf_fractional_optimizers_OHA.py
 
-Legacy TensorFlow / Keras implementations of Herrera-style fractional optimizers.
+TensorFlow / Keras implementations of the Herrera-type fractional optimizers.
 
-Purpose
--------
-This file is adapted for older TensorFlow / Keras environments that still use
-the `optimizer_v2` API style, where custom optimizers typically:
+API
+---
+The classes use the optimizer_v2 API of tf.keras (TensorFlow 2.10), in which
+custom optimizers
     - subclass `tf.keras.optimizers.Optimizer`,
     - use `_set_hyper(...)` / `_get_hyper(...)`,
     - implement `_create_slots(...)`,
     - implement `_resource_apply_dense(...)` and `_resource_apply_sparse(...)`,
-    - accept `lr` as the legacy learning-rate argument.
-
-This file provides the same conceptual optimizer family as the modern version,
-but rewritten to match the older API expected by environments such as the one
-shown in the traceback:
-
-    Allowed kwargs are {'decay', 'clipvalue', 'clipnorm', 'global_clipnorm', 'lr'}.
+    - accept `lr` as the learning-rate argument.
 
 Main idea
 ---------
@@ -52,6 +46,9 @@ Implemented optimizers
     - FRMSprop
     - FAdamW
 
+FSGD, FAdam, FRMSprop and FAdadelta form the Herrera group of the study;
+FAdagrad and FAdamW are provided in addition.
+
 Important conceptual note
 -------------------------
 These are Herrera-style fractional gradient-scaled optimizers.
@@ -59,11 +56,8 @@ They are not explicit fractional-memory optimizers.
 
 Compatibility
 -------------
-This version is intended for older `tf.keras.optimizers.Optimizer` APIs.
-It accepts both:
-    - learning_rate=...
-    - lr=...
-but internally stores the hyperparameter in the legacy style.
+The learning rate can be passed as learning_rate=... or as lr=...; it is
+stored as the learning_rate hyperparameter of the optimizer.
 
 References
 ----------

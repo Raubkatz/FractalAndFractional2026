@@ -16,10 +16,11 @@ in this project (class_b and class_c), using:
 
 Purpose
 -------
-This file exists so that the three related-work optimizers can be compared
-directly against the optimizers in class_b, class_c, and the adaptive
-memory class in the same experiment runners (01_run_nn_classifications.py
-and 01bg_optimize_fractal_surface_himmelblau_requested_16_optimizers.py).
+This file provides the three related-work optimizer families so that they can
+be compared directly against the optimizers in class_b, class_c, and the
+adaptive memory class in the same experiment runners
+(B_01_run_nn_classification.py, A_01_himmelblau_loss_surface_optimization.py
+and A_02_ackley_loss_surface_optimization.py).
 
 Implemented optimizers
 ----------------------
@@ -78,7 +79,7 @@ gradient g_t, for 11 total terms. The default history_size=11 matches this.
 Users who prefer fewer terms may reduce history_size; the sum then runs
 from i=1 to history_size-1.
 
-Note on secondary sources: The Mu et al. (AdaGL, 2024) paper's description
+Note on secondary sources: The Chen et al. (AdaGL, 2024) paper's description
 of Zhou et al.'s recursion contains two transcription errors — it states
 w_0 = 0 (should be w_0 = 1, as proven in Zhou et al.'s own Theorem 1) and
 uses (i+1) in the denominator (should be i). The implementation here uses
@@ -498,7 +499,7 @@ class _FCGLBase:
         w_0 = 1
         w_k = (1 - (alpha+1)/k) * w_{k-1},  k >= 1
 
-    Note: The Mu et al. (AdaGL, 2024) paper's secondary description of Zhou
+    Note: The Chen et al. (AdaGL, 2024) paper's secondary description of Zhou
     et al.'s formula contains two transcription errors: it states w_0=0
     (Zhou et al.'s own Theorem 1 proof states w_0=1) and writes (i+1) in
     the denominator (the correct Gamma-eliminating recursion uses i). This
@@ -895,7 +896,7 @@ class _AOFGDBase:
         self,
         alpha_init: float = 0.9,
         alpha_min: float = 0.5,
-        alpha_max: float = 1.5,
+        alpha_max: float = 1.9,
         delta_alpha: float = 0.02,
         cef_threshold: float = 0.05,
         ema_gamma: float = 0.95,
@@ -926,7 +927,7 @@ class _AOFGDBase:
         self.frac_epsilon = float(frac_epsilon)
         self.eps_cef = float(eps_cef)
 
-        # Precompute gamma(2 - alpha) for the initial order (updated dynamically)
+        # Cache of Gamma(2 - alpha) values used by _gamma_factor().
         self._gamma_cache = {}
 
     def _gamma_factor(self, alpha_val: float) -> float:
@@ -985,9 +986,7 @@ class _AOFGDBase:
         dtype = var.dtype.base_dtype
         eps = tf.cast(self.frac_epsilon, dtype)
         exponent = 1.0 - alpha_val_scalar          # scalar tensor
-        # Gamma(2 - alpha): compute in Python as scalar; approximate with
-        # the value at alpha_init for numerical stability (order changes slowly)
-        # For fully dynamic computation, we use tf.math.lgamma.
+        # Gamma(2 - alpha) of the current smoothed order, via tf.math.lgamma.
         log_gamma = tf.math.lgamma(
             tf.cast(2.0, dtype) - tf.cast(alpha_val_scalar, dtype)
         )
@@ -1096,7 +1095,7 @@ class AOFGD_SGD(_AOFGDBase, tf.keras.optimizers.Optimizer):
         nesterov: bool = False,
         alpha_init: float = 0.9,
         alpha_min: float = 0.5,
-        alpha_max: float = 1.5,
+        alpha_max: float = 1.9,
         delta_alpha: float = 0.02,
         cef_threshold: float = 0.05,
         ema_gamma: float = 0.95,
@@ -1211,7 +1210,7 @@ class AOFGD_Adam(_AOFGDBase, tf.keras.optimizers.Optimizer):
         amsgrad: bool = False,
         alpha_init: float = 0.9,
         alpha_min: float = 0.5,
-        alpha_max: float = 1.5,
+        alpha_max: float = 1.9,
         delta_alpha: float = 0.02,
         cef_threshold: float = 0.05,
         ema_gamma: float = 0.95,
@@ -1378,7 +1377,7 @@ if __name__ == "__main__":
                 lr=1e-2,
                 alpha_init=0.9,
                 alpha_min=0.5,
-                alpha_max=1.5,
+                alpha_max=1.9,
                 delta_alpha=0.02,
                 cef_threshold=0.05,
             ),
@@ -1389,7 +1388,7 @@ if __name__ == "__main__":
                 lr=1e-3,
                 alpha_init=0.9,
                 alpha_min=0.5,
-                alpha_max=1.5,
+                alpha_max=1.9,
                 delta_alpha=0.02,
                 cef_threshold=0.05,
             ),

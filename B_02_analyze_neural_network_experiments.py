@@ -2,19 +2,20 @@
 # -*- coding: utf-8 -*-
 
 """
-analyze_nn_classification_results.py
+B_02_analyze_neural_network_experiments.py
 
-Full analysis script for the multi-run fractional optimizer × fractal activation
-classification experiments produced by:
+Analysis script for the neural-network classification experiments produced by:
 
-    01_run_nn_classifications_21_optimizers.py
+    B_01_run_nn_classification.py
 
-Mirrors the structure of the Himmelblau surface analysis but adapted for
-classification metrics (accuracy, F1, precision, recall, epochs, timing).
+(21 optimizers x 6 activations x 4 settings, 40 runs per configuration, ten
+datasets). It follows the structure of the surface analyses, adapted to
+classification metrics (accuracy, F1, precision, recall, epochs, timing). The
+script reads only the stored per-run records; no model is retrained.
 
 Expected input structure
 ------------------------
-    results_fractional_activation_optimizer_study_21/
+    compiled_results_all_experiments/
         <dataset_name>/
             <optimizer>__<activation>__v<vderiv>.json   (one per NN config)
             <optimizer>__<activation>__h<h>__v<vderiv>.json
@@ -46,6 +47,24 @@ Each NN JSON schema:
         ],
         "run_histories": [...]   // optional
     }
+
+The vderiv field holds the learning rate for the standard optimizers and the
+order-related parameter (nu, alpha or alpha_init) for the fractional ones.
+
+Analysis
+--------
+A configuration is the tuple (dataset, optimizer, activation, history_size,
+vderiv). Each configuration is summarized over its runs by the mean, the sample
+standard deviation, the standard error, a 95% normal-approximation confidence
+interval (CI_Z = 1.96), the median, the quartiles and the extremes.
+
+    - Optimizer-level tables and figures select, per dataset, the configuration
+      of each optimizer with the highest mean of the RANK_BY metric; ties are
+      resolved by the secondary metric and then by the shorter mean training
+      time.
+    - Activation-level, optimizer-group, activation-family and fractional-order
+      views pool all loaded runs that fall into the respective cell.
+    - Cross-dataset summaries average the per-dataset results.
 
 Main outputs
 ------------
@@ -109,12 +128,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 # 0) USER SETTINGS
 # =============================================================================
 
-#RESULTS_ROOT = Path("results_fractional_activation_optimizer_study_21_50iterations_reduced")
-#ANALYSIS_ROOT = Path("nn_classification_analysis_21_50iterations_reduced")
-
-#RESULTS_ROOT = Path("final_results_classificaiton_experiments_40runs")
-#ANALYSIS_ROOT = Path("analysis_final_nn_40runs")
-
+# Input folder written by B_01_run_nn_classification.py, and output folder.
 RESULTS_ROOT = Path("compiled_results_all_experiments")
 ANALYSIS_ROOT = Path("compiled_analysis_October2026")
 
@@ -135,7 +149,7 @@ CI_Z = 1.96
 
 # Plot settings
 MAKE_PLOTS = True
-FONT_SCALE = 2.3  # 1.0 = original font sizes; >1 enlarges all plot fonts; <1 reduces them
+FONT_SCALE = 2.3  # 1.0 = default font sizes; >1 enlarges all plot fonts; <1 reduces them
 PLOT_DPI = 180
 FIGSIZE_BAR      = (16, 7)
 FIGSIZE_WIDE_BAR = (22, 8)
@@ -196,14 +210,15 @@ FRACTAL_ACTIVATIONS = {
 
 STANDARD_ACTIVATIONS = {"relu", "tanh"}
 
-# Additional activation-family analysis: exclude only the x+sin
-# Weierstrass-Mandelbrot activation. The original analyses remain unchanged.
+# Additional activation-family analysis that excludes only the x+sin
+# Weierstrass-Mandelbrot activation. The analyses over all six activations are
+# computed as well.
 ACTIVATION_FAMILY_EXCLUDE_XPSIN = "weierstrass_mandelbrot_function_xpsin"
 
 
 # Plot-only abbreviations. These are used only for axis labels, tick labels,
 # legends, and annotations in figures. Tables, CSV files, and reports keep the
-# original optimizer and activation names.
+# full optimizer and activation names.
 PLOT_OPTIMIZER_LABELS: Dict[str, str] = {
     "SGD": "SGD",
     "RMSprop": "RMSprop",
@@ -558,8 +573,8 @@ def compute_optimizer_group_statistics(df: pd.DataFrame) -> pd.DataFrame:
 
 def compute_vderiv_sensitivity(df: pd.DataFrame) -> pd.DataFrame:
     """
-    For Herrera and GL-Memory optimizers (which have a vderiv sweep),
-    compute accuracy_mean per (dataset, optimizer, vderiv).
+    For the Herrera and GL-Memory optimizers, compute accuracy and F1
+    statistics per (dataset, optimizer, vderiv).
     """
     mask = df["optimizer_group"].isin(["Herrera", "GL-Memory"])
     sub = df[mask].copy()
@@ -768,7 +783,7 @@ def plot_accuracy_bar(opt_stats: pd.DataFrame, dataset: str, out_dir: Path) -> N
     # Legend for groups
     from matplotlib.patches import Patch
     handles = [Patch(facecolor=c, label=g) for g, c in GROUP_COLORS.items()]
-    ax.legend(handles=handles, loc="lower right", fontsize=8, framealpha=0.8)
+    ax.legend(handles=handles, loc="lower left", fontsize=8, framealpha=0.8)
 
     _finish_fig(fig, out_dir / "accuracy_bar_ranked.png")
 

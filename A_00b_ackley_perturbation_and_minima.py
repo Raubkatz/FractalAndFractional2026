@@ -14,7 +14,7 @@ which the fractal perturbation of the Ackley surface is defined. It
     4) writes those minima together with a fingerprint of the perturbation
        to ackley_perturbed_reference_minima.json.
 
-The optimization script A_02b_ackley_loss_surface_optimization.py loads that
+The optimization script A_02_ackley_loss_surface_optimization.py loads that
 file for the perturbed variant and refuses to run if its own perturbation
 constants, base minima or objective values disagree with the fingerprint. The
 standard variant needs no file, because its minima are the analytic ones.
@@ -22,7 +22,7 @@ standard variant needs no file, because its minima are the analytic ones.
 Run this first:
 
     python3 A_00b_ackley_perturbation_and_minima.py
-    python3 A_02b_ackley_loss_surface_optimization.py
+    python3 A_02_ackley_loss_surface_optimization.py
 
 Outputs
 -------
@@ -113,7 +113,7 @@ GRID_N = 350
 ZOOM_GRID_N = 500
 ZOOM_WINDOW_SIZES = [0.30, 0.05]
 
-SUCCESS_DISTANCE_THRESHOLD = 0.2
+SUCCESS_DISTANCE_THRESHOLD = 0.3
 MARK_SUCCESS_RADIUS_AROUND_MINIMA = True
 SUCCESS_RADIUS_LINEWIDTH = 1.8
 

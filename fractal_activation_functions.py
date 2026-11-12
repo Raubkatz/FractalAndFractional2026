@@ -6,7 +6,7 @@ import tensorflow as tf
 from tensorflow.experimental import numpy as tnp
 
 
-# Custom activation function: Revised Modulated Blancmange Curve
+# Custom activation function: Modulated Blancmange Curve
 def modulated_blancmange_curve(x, n_terms=30, a=0.75):
     y = tf.zeros_like(x)
     for n in range(n_terms):
@@ -313,8 +313,8 @@ def random_depth_weierstrass_mandelbrot_function_xpsin(
     """
     Random-depth version of weierstrass_mandelbrot_function_xpsin.
 
-    This variant performed competitively in the paper and is less extreme
-    than the ReLU-based Weierstrass-Mandelbrot variant.
+    This variant performed competitively in the predecessor activation study
+    and is less extreme than the ReLU-based Weierstrass-Mandelbrot variant.
     """
     depth = _sample_random_depth(min_terms, max_terms)
 
@@ -375,8 +375,8 @@ def random_depth_weierstrass_function_tf(
     Random-depth version of the plain Weierstrass activation.
 
     This is mainly useful as a control activation.
-    The paper suggests that the plain Weierstrass function alone is
-    less useful than its modulated variants.
+    The predecessor activation study suggests that the plain Weierstrass
+    function alone is less useful than its modulated variants.
     """
     depth = _sample_random_depth(min_terms, max_terms)
 
@@ -404,7 +404,7 @@ def cantor_function_tf(x, depth=10):
     """
     Cantor function activation — the Devil's Staircase (Implementation 1: Standard).
 
-    Implements the recursive construction from Chiperaa et al. (2025), Eq. 10,
+    Implements the recursive construction from Chipera et al. (2025), Eq. 10,
     with depth d=10 and sigmoid preprocessing.
 
     Maps R -> [0, 1]:
@@ -416,7 +416,7 @@ def cantor_function_tf(x, depth=10):
                = 0.5                             if y in (1/3, 2/3)
                = 0.5 + 0.5 * c_{d-1}(3y - 2)   if y in [2/3, 1]
 
-    Key properties (per Chiperaa et al., 2025):
+    Key properties (per Chipera et al., 2025):
     - Continuous everywhere but differentiable nowhere (zero derivative a.e.)
     - Strictly monotonically increasing: maps [0, 1] -> [0, 1]
     - Not globally Lipschitz; Hölder continuous (exponent ≈ log2/log3 ≈ 0.631)
@@ -481,7 +481,7 @@ def cantor_set_activation_tf(x, depth=10):
     """
     Cantor set indicator activation (Implementation 2: Cantor set / discontinuous).
 
-    Implements f_S(x) = 1_{C_d}(sigmoid(x)) from Chiperaa et al. (2025), Eq. 11.
+    Implements f_S(x) = 1_{C_d}(sigmoid(x)) from Chipera et al. (2025), Eq. 11.
 
     Maps R -> {0, 1}:
         Returns 1  if sigmoid(x) is (approximately) in the depth-d Cantor set.

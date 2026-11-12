@@ -1,63 +1,53 @@
 """
-class_minimal_fractional_adaptive_optimizers.py  (corrected and extended)
+class_minimal_fractional_adaptive_optimizers.py
 
-Legacy TensorFlow / Keras implementations of adaptive memory-based
-fractional optimizers.
+TensorFlow / Keras implementations of the adaptive memory-based fractional
+optimizers of the study (Adaptive-Memory group).
 
 =============================================================================
-ANALYSIS OF THE ORIGINAL IMPLEMENTATION AND CORRECTIONS APPLIED
+CONSTRUCTION
 =============================================================================
 
-This family was already designed around the two main mathematical fixes
-that the plain MemoryF* family lacked: the fractional gradient was
-norm-matched to the raw gradient, and all squared-gradient accumulators
-used the raw gradient by default. Both mechanisms are kept unchanged.
-The following corrections and improvements are applied on top, mirroring
-the corrected memory_fractional_optimizers file:
+The family mixes the raw gradient with a short-memory Grunwald-Letnikov
+gradient through an adaptive weight lambda_t. The fractional gradient passes
+through the same mechanisms as in the GL-Memory family
+(class_c_tf_fractional_optimizers_SR.py):
 
-(1) DESCENT SAFEGUARD (new, default on).
-    For orders nu > 1 (the experiments sweep nu in {1.25, 1.5}) the
-    truncated GL kernel has a NEGATIVE coefficient sum, so under
-    near-constant gradients the fractional gradient points uphill. The
-    convex mixing (1-lambda) g + lambda g_hat bounds the damage as long as
-    lambda_t < 1/2, but the memory component still pulls against descent.
-    FIX: if <g^(nu), g_t> <= 0 for a variable, the raw gradient replaces
+(1) NORM MATCHING. The fractional gradient is rescaled to the L2 norm of the
+    raw gradient, so the memory term contributes direction while the step
+    magnitude stays on the scale of the base optimizer.
+
+(2) RAW SECOND MOMENT. All squared-gradient accumulators use the raw
+    gradient by default.
+
+(3) DESCENT SAFEGUARD (descent_check=True).
+    For orders nu > 1 the truncated GL kernel has a NEGATIVE coefficient
+    sum, so under near-constant gradients the fractional gradient points
+    uphill. The convex mixing (1-lambda) g + lambda g_hat bounds the damage
+    as long as lambda_t < 1/2, but the memory component still pulls against
+    descent. If <g^(nu), g_t> <= 0 for a variable, the raw gradient replaces
     the fractional gradient for that variable in that step (before norm
     matching). The memory term is used exactly when it is
     descent-compatible.
 
-(2) O(K) SLOT WRITES PER STEP (efficiency bug).
-    The original stored K per-lag history slots and re-wrote ALL of them
-    every step (shift-by-one via K assigns plus stack/concat).
-    FIX: a single history slot of shape [K] + var.shape used as a CIRCULAR
-    buffer; exactly one row is written per step (scatter_nd_update at
-    position t mod K), and the GL coefficients are rotated with tf.gather
-    instead of moving the data.
+(4) HISTORY BUFFER. A single history slot of shape [K] + var.shape is used
+    as a CIRCULAR buffer; exactly one row is written per step
+    (scatter_nd_update at position t mod K), and the GL coefficients are
+    rotated with tf.gather instead of moving the data.
 
-(3) SCALAR STATE STORED AS FULL TENSORS (memory bug).
-    The mixing coefficient lambda_t and the smoothed stability state are
-    scalars per variable, but were stored as full var-shaped slots filled
-    with a constant (doubling optimizer memory and adding full-tensor
-    writes every step).
-    FIX: both are now true scalar slots (shape []). The public inspection
-    methods current_mix_values() and current_stability_values() behave as
-    before.
+(5) SCALAR STATE. The mixing coefficient lambda_t and the smoothed stability
+    state are scalars per variable and are stored as scalar slots
+    (shape []). The inspection methods current_mix_values() and
+    current_stability_values() read them.
 
-(4) KERAS-EXACT ADAM FORMULATION.
-    AdaptiveMemoryFAdam now folds the bias correction into the learning
-    rate and places epsilon outside the uncorrected sqrt, exactly as the
-    Keras Adam baseline does. At nu = 1 (where g_eff = g_t exactly,
-    independently of lambda_t) the optimizer is then bit-compatible with
-    Keras Adam.
+(6) KERAS-EXACT ADAM FORMULATION. AdaptiveMemoryFAdam folds the bias
+    correction into the learning rate and places epsilon outside the
+    uncorrected sqrt, exactly as the Keras Adam baseline does. At nu = 1
+    (where g_eff = g_t exactly, independently of lambda_t) the optimizer is
+    then bit-compatible with Keras Adam.
 
-    NOTE: slot layout changes (one "grad_history" slot instead of K
-    "grad_history_i" slots; scalar "frac_mix"/"stability_state"); old
-    checkpoints of these optimizers are not restorable. Constructor
-    arguments, training code, set_current_loss(), and the inspection
-    methods are unchanged.
-
-Main idea (unchanged)
----------------------
+Main idea
+---------
     1. Keep the fractional order fixed.
     2. Compute a short-memory fractional gradient
            g_t^(nu) = sum_{k=0}^{K-1} c_k^(nu) g_{t-k}.
@@ -77,22 +67,25 @@ Implemented optimizers
     AdaptiveMemoryFRMSprop      (RMSprop, optional momentum / centered)
     AdaptiveMemoryFAdam         (Adam, optional AMSGrad)
     AdaptiveMemoryFAdadelta     (Adadelta)
-    -- new in this version --
+    -- extensions (appendix on the extensions of the memory-based families) --
     AdaptiveMemoryFAdagrad      (Adagrad)
     AdaptiveMemoryFAdamW        (AdamW, decoupled weight decay)
     AdaptiveMemoryFNadam        (Nadam, Nesterov-Adam)
     AdaptiveMemoryFAdamax       (Adamax, infinity-norm second moment)
 
-Recommended defaults (unchanged)
---------------------------------
-Neural networks:  vderiv = 0.85-0.9, history_size = 3-4,
-                  initial_mix = 0.10, max_mix = 0.30, adapt_step = 0.01,
-                  stability_threshold = 0.25.
-Difficult analytic surfaces: history_size = 4-6, max_mix = 0.40,
-                  adapt_step = 0.015.
+Settings used in the study
+--------------------------
+    vderiv in {0.75, 1.25, 1.50, 1.75}, history_size = 4,
+    normalize_coefficients = True, initial_mix = 0.10, min_mix = 0.0,
+    max_mix = 0.30, adapt_step = 0.01, mix_ema_gamma = 0.90,
+    stability_ema_gamma = 0.95, stability_threshold = 0.25,
+    stability_clip = 10.0, norm_match_fractional_gradient = True,
+    use_raw_gradient_for_second_moment = True, loss_ema_beta = 0.95,
+    loss_worsen_tolerance = 1e-4, loss_mix_decrease = 0.02,
+    warmup_steps = 0.
 
-Usage (unchanged)
------------------
+Usage
+-----
     optimizer = AdaptiveMemoryFAdam(lr=1e-3, vderiv=0.9, history_size=4)
     model.compile(optimizer=optimizer, loss="sparse_categorical_crossentropy")
     model.fit(x, y, epochs=10)
@@ -106,8 +99,8 @@ from typing import Any, Dict, List
 import tensorflow as tf
 
 # ---------------------------------------------------------------------------
-# Base-class selection (optimizer_v2 API with _set_hyper etc.), as in the
-# corrected memory_fractional_optimizers file.
+# Base-class selection (optimizer_v2 API with _set_hyper etc.), as in
+# class_c_tf_fractional_optimizers_SR.py.
 # ---------------------------------------------------------------------------
 if hasattr(tf.keras.optimizers.Optimizer, "_set_hyper"):
     _KerasOptimizerBase = tf.keras.optimizers.Optimizer
@@ -314,7 +307,7 @@ class _AdaptiveMemoryFractionalBase:
         self.add_slot(var, "stability_state", initializer="zeros", shape=[])
 
     # ------------------------------------------------------------------
-    # Loss interface (unchanged)
+    # Loss interface
     # ------------------------------------------------------------------
 
     def set_current_loss(self, loss_value):
@@ -422,9 +415,8 @@ class _AdaptiveMemoryFractionalBase:
 
     def _adaptive_effective_gradient(self, grad, var):
         """
-        Main shared adaptive step (identical control flow to the original;
-        the fractional gradient now comes from the corrected circular
-        buffer with descent safeguard).
+        Main shared adaptive step. The fractional gradient comes from the
+        circular history buffer with descent safeguard and norm matching.
 
         Returns:
             raw_grad
@@ -492,7 +484,7 @@ class _AdaptiveMemoryFractionalBase:
         return raw_grad, eff_grad, second_moment_grad, update_ops
 
     # ------------------------------------------------------------------
-    # Inspection (unchanged behaviour)
+    # Inspection
     # ------------------------------------------------------------------
 
     def current_mix_values(self) -> List[tf.Tensor]:
@@ -950,7 +942,7 @@ class AdaptiveMemoryFAdadelta(_AdaptiveMemoryFractionalBase, _KerasOptimizerBase
 
 
 # =============================================================================
-# AdaptiveMemoryFAdagrad  (new)
+# AdaptiveMemoryFAdagrad
 # =============================================================================
 
 
@@ -1033,7 +1025,7 @@ class AdaptiveMemoryFAdagrad(_AdaptiveMemoryFractionalBase, _KerasOptimizerBase)
 
 
 # =============================================================================
-# AdaptiveMemoryFAdamW  (new)
+# AdaptiveMemoryFAdamW
 # =============================================================================
 
 
@@ -1081,7 +1073,7 @@ class AdaptiveMemoryFAdamW(AdaptiveMemoryFAdam):
 
 
 # =============================================================================
-# AdaptiveMemoryFNadam  (new)
+# AdaptiveMemoryFNadam
 # =============================================================================
 
 
@@ -1189,7 +1181,7 @@ class AdaptiveMemoryFNadam(_AdaptiveMemoryFractionalBase, _KerasOptimizerBase):
 
 
 # =============================================================================
-# AdaptiveMemoryFAdamax  (new)
+# AdaptiveMemoryFAdamax
 # =============================================================================
 
 

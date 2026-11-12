@@ -2,20 +2,21 @@
 # -*- coding: utf-8 -*-
 
 """
-B_05_activation_optimizer_gradient_probe.py
+B_03_activation_optimizer_gradient_probe.py
 
 End-to-end gradient diagnostic for every activation and every optimizer of the
-classification study, written for the supplementary appendix.
+classification study. It provides the measurements of the appendix on the
+gradient-level diagnostics of the activation and optimizer combinations.
 
-WHY THIS EXISTS
----------------
-B_03 and B_04 answer the reviewer's question about the high-frequency
-activation analytically: they measure the value, the derivative, the resolved
-scales and the non-finite counts of the activations themselves, on a fixed
-sample of pre-activations, without training anything. That establishes what
-each activation hands to an optimizer. It does not establish what the
-optimizers of this study then do with it, and for the fractional optimizers
-that is not a detail, because none of them consumes the raw gradient:
+BACKGROUND
+----------
+B_04_activation_comparison_diagnostics.py characterizes the activations
+themselves: it measures the value, the derivative, the resolved scales and the
+non-finite counts of the activations on a fixed sample of pre-activations,
+without training anything. That establishes what each activation hands to an
+optimizer. It does not establish what the optimizers of this study then do with
+it, and for the fractional optimizers that is not a detail, because none of
+them consumes the raw gradient:
 
     Herrera-type (class_b)        multiplies the gradient by
                                   f_nu(theta) = (|theta| + eps)^(1-nu)/Gamma(2-nu),
@@ -48,9 +49,9 @@ that is not a detail, because none of them consumes the raw gradient:
 Each of these mechanisms reads something from the gradient sequence. If the
 gradient sequence carries no information, as the analysis of the x+sin
 activation suggests, then what these optimizers report on that activation is
-the behaviour of their fallback paths, not of their mechanisms. That is a
-statement the study can make only by measuring the training steps themselves,
-which model.fit does not expose.
+the behaviour of their fallback paths, not of their mechanisms. This can be
+established only by measuring the training steps themselves, which model.fit
+does not expose.
 
 WHAT THIS SCRIPT MEASURES
 -------------------------
@@ -84,8 +85,9 @@ deployed architecture with an explicit training loop and records
 
     outcome                 final training loss, test accuracy, and the 99th
                             percentile of the pre-activations the first layer
-                            produced, which says whether the sampling range
-                            used by B_04 was the right one.
+                            produced, which shows whether the sampling range
+                            used by B_04_activation_comparison_diagnostics.py
+                            covers the deployed networks.
 
 TWO PROPERTIES OF THE DEPLOYED SETUP THAT THIS SCRIPT REPRODUCES
 ----------------------------------------------------------------
@@ -116,29 +118,35 @@ floor, and the adaptive family reduces to the plain optimizer it is built on.
 The probe records the realized mix and the gradient coherence side by side, so
 that this can be read off rather than assumed.
 
-The uploaded runner carries VDERIV_GRID = [0.75, 1.25, 1.5], three orders,
-while the manuscript reports 21 optimizers at four settings each. The four
-value grid is used here, as section 0 states; set ORDER_GRID back to three
-values to reproduce the uploaded file instead.
+GRID AND COST
+-------------
+Dataset diabetes with the architecture of the classification study (one
+hidden layer of 64 units, batch size 32, 30 epochs, 510 optimization steps per
+run). The six activations of the study; each fractal activation at the lengths
+of TRUNCATIONS_TO_PROBE (8, 16, 24, 32, 64) that do not exceed its deployed
+length, and at the deployed length itself. All 21 optimizers at four settings
+each: the four fractional orders of ORDER_GRID for the 17 fractional
+optimizers and the four learning rates of BASELINE_LEARNING_RATE_GRID for the
+standard ones. NETWORK_PROBE_RUNS = 3 seeds. In total 2016 configurations and
+6048 runs.
 
-COST
-----
-The full grid is 21 optimizers at four settings, six activations, the
-truncation lengths of the review plus each activation's deployed one, and
-NETWORK_PROBE_RUNS seeds. The script prints the exact number of runs and a
-measured estimate of the remaining time after the first few, and it writes
-every finished run to the results file immediately, so an interrupted run
-loses nothing: starting it again skips the cells that are already there. Seeds
-are the outermost loop, so an early stop still leaves every cell covered once.
-Cutting the cost is a matter of shortening ORDER_GRID, TRUNCATIONS_TO_PROBE or
-OPTIMIZER_FAMILIES in section 0.
+The script prints the exact number of runs and a measured estimate of the
+remaining time after the first few, and it writes every finished run to the
+results file immediately, so an interrupted run loses nothing: starting it
+again skips the cells that are already there. Seeds are the outermost loop, so
+an early stop still leaves every cell covered once. Cutting the cost is a
+matter of shortening ORDER_GRID, TRUNCATIONS_TO_PROBE or OPTIMIZER_FAMILIES in
+section 0.
 
 RUNNING
 -------
 No command line arguments. Requires TensorFlow, scikit-learn and the four
 optimizer modules and the activation module of the study in the same directory.
 
-    python3 B_05_activation_optimizer_gradient_probe.py
+    python3 B_03_activation_optimizer_gradient_probe.py
+
+The records can afterwards be re-analyzed without training by
+B_04_analyze_activation_optimizer_probe.py.
 
 Outputs
 -------
@@ -182,7 +190,8 @@ PLOT_DIR = OUTPUT_DIR / "plots"
 RECORDS_FILE = OUTPUT_DIR / "run_records.csv"
 
 # -----------------------------------------------------------------------------
-# Dataset and architecture. Hyperparameters follow Table 1 of the study.
+# Dataset and architecture. Hyperparameters follow DATASET_HYPERPARAMS of
+# B_01_run_nn_classification.py.
 PROBE_DATASET = "diabetes"
 DATASET_HYPERPARAMS: Dict[str, Dict[str, Any]] = {
     "seeds":    {"task": "multi-class", "n": 64,  "hidden_layers": 2, "batch_size": 32, "epochs": 30},
@@ -198,9 +207,9 @@ NETWORK_PROBE_RUNS = 3
 SEED_VAL = 238974
 
 # -----------------------------------------------------------------------------
-# Activations. The four fractal ones are probed at the truncation lengths named
-# in the review and at their own deployed length; the two standard ones have no
-# truncation parameter.
+# Activations. The four fractal ones are probed at the lengths of
+# TRUNCATIONS_TO_PROBE that do not exceed their deployed length, and at the
+# deployed length itself; the two standard ones have no truncation parameter.
 TRUNCATIONS_TO_PROBE = [8, 16, 24, 32, 64]
 
 ACTIVATION_SPECS: List[Dict[str, Any]] = [
@@ -235,7 +244,7 @@ INCLUDE_FAMILIES = [
     "baseline", "herrera", "memory", "adaptive_memory", "related_work",
 ]
 
-# Four settings per optimizer, as in the manuscript: four fractional orders for
+# Four settings per optimizer, as in the article: four fractional orders for
 # the fractional families, four learning rates for the baselines.
 ORDER_GRID = [0.75, 1.25, 1.50, 1.75]
 
@@ -449,7 +458,7 @@ class ActivationFactory:
         return self.spec(name)["display"]
 
     def settings_for(self, name: str) -> List[Optional[int]]:
-        """Truncations to probe: the review's lengths plus the deployed one."""
+        """Truncations to probe: TRUNCATIONS_TO_PROBE up to the deployed length, plus the deployed length."""
         spec = self.spec(name)
         deployed = spec["deployed_terms"]
         if deployed is None:
@@ -811,10 +820,10 @@ class InstrumentedRun:
 
     The step is compiled once per run, because the fractal activations unroll
     into as many operations as they have scales and executing that eagerly at
-    every step would dominate the cost. Three quantities need state that
-    survives between steps and are therefore kept in variables of their own:
-    the previous gradient, for the coherence measurement, and the parameters
-    before the update, for the applied update norm.
+    every step would dominate the cost. State that survives between steps is
+    kept in variables of its own: the previous gradient, for the coherence
+    measurement, and the parameters before the update, for the applied update
+    norm.
     """
 
     def __init__(

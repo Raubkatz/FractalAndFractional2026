@@ -21,6 +21,8 @@ The final classification experiment contains **504 optimizer–activation–para
 
 The final loss-surface experiment evaluates **84 optimizer–parameter configurations per surface variant**, with **100 repeated runs per configuration**. Across standard Ackley, additive Ackley, standard Himmelblau, and additive Himmelblau, this corresponds to **33,600 surface-optimization runs**.
 
+All settings are defined at the top of each script, and every script is configured with the settings of the experiments reported in the article.
+
 This repository contains the original experimental framework. Updated optimizer and activation-function implementations for **Keras 3 (TensorFlow 2.21)** and **PyTorch 2.15** are maintained separately in [Fractal_Fractional_Base](https://github.com/Raubkatz/Fractal_Fractional_Base). The companion repository is not a substitute for the experiment scripts and analysis workflow documented here.
 
 ---
@@ -70,6 +72,7 @@ The optimizers and activation functions used in this repository originate from t
 FractalAndFractional2026/
 │
 ├── README.md
+├── requirements.txt
 ├── Fractal_And_Fractional.pdf
 ├── template.tex
 │
@@ -89,12 +92,14 @@ FractalAndFractional2026/
 ├── B_01_run_nn_classification.py
 ├── B_02_analyze_neural_network_experiments.py
 ├── B_03_activation_optimizer_gradient_probe.py
+├── B_04_analyze_activation_optimizer_probe.py
 ├── B_04_activation_comparison_diagnostics.py
 │
-└── D_01_memory_degeneracy_kernel_analysis.py
+├── D_01_memory_degeneracy_kernel_analysis.py
+└── D_02_memory_degeneracy_runtime_probe.py
 ```
 
-> Keep the Python module filenames consistent with those shown above so that the imports resolve correctly.
+> Keep the Python module filenames consistent with those shown above so that the imports resolve correctly. All scripts are run from the repository root; they import the optimizer and activation modules from the same directory and write their outputs into subfolders of the working directory.
 
 ---
 
@@ -118,29 +123,33 @@ LaTeX source of the manuscript.
 
 Provides the TensorFlow implementations of the activation functions used in the experiments.
 
-The final classification suite contains:
+The classification suite contains:
 
 - `relu`
 - `tanh`
-- `modulated_blancmange_curve`
-- `decaying_cosine_function_tf`
-- `modified_weierstrass_function_tanh`
-- `weierstrass_mandelbrot_function_xpsin`
+- `modulated_blancmange_curve` (a = 0.75, 30 terms)
+- `decaying_cosine_function_tf` (c = 0.5, d = 2, ζ = 0.2666, 75 terms)
+- `modified_weierstrass_function_tanh` (a = 0.5, b = 1.5, 100 terms)
+- `weierstrass_mandelbrot_function_xpsin` (γ = 0.5, λ = 2, `num_terms = 100`, i.e. scales k = 1, …, 99)
+
+The fractal activations are used with the default parameters of the module, which are those of the predecessor study [[O2]](#ref-o2). The module also contains further activations (other Weierstrass-type variants, random-depth variants, and Cantor-based variants) that are not part of the experiments of the article.
 
 ---
 
 ### Optimizer Implementations
 
+All optimizers use the `optimizer_v2` API of `tf.keras` in TensorFlow 2.10 and accept the learning rate as `lr=` or `learning_rate=`.
+
 #### `class_b_tf_fractional_optimizers_OHA.py`
 
-Implements the Herrera-type fractional optimizers used in the final experiments:
+Implements the Herrera-type fractional optimizers used in the experiments:
 
 - `FSGD`
 - `FAdam`
 - `FRMSprop`
 - `FAdadelta`
 
-These methods locally rescale the current gradient using the fractional order but do not introduce explicit gradient memory.
+These methods locally rescale the current gradient by the Caputo-type factor (|θ| + ε)^(1−ν) / Γ(2−ν) with ε = 10⁻⁶ but do not introduce explicit gradient memory. `FAdagrad` and `FAdamW` are provided in addition.
 
 #### `class_c_tf_fractional_optimizers_SR.py`
 
@@ -151,7 +160,7 @@ Implements the explicit Grünwald–Letnikov memory-based optimizers:
 - `MemoryFAdam`
 - `MemoryFAdadelta`
 
-These optimizers construct the update direction from the current and previous gradients.
+These optimizers construct the update direction from the current and previous gradients (history length K = 6, unnormalized coefficients), with norm matching, a descent safeguard, and raw-gradient second moments. The memory-based extensions `MemoryFAdagrad`, `MemoryFAdamW`, `MemoryFNadam`, and `MemoryFAdamax` are provided in addition.
 
 #### `class_minimal_fractional_adaptive_optimizers.py`
 
@@ -162,15 +171,15 @@ Implements the adaptive memory-based optimizers introduced in the paper:
 - `AdaptiveMemoryFAdam`
 - `AdaptiveMemoryFAdadelta`
 
-The fractional-memory direction is mixed with the ordinary gradient through an adaptive trust coefficient.
+The fractional-memory direction (history length K = 4, normalized coefficients) is mixed with the ordinary gradient through an adaptive trust coefficient λ_t ∈ [0, 0.30], initialized at 0.10. The extensions `AdaptiveMemoryFAdagrad`, `AdaptiveMemoryFAdamW`, `AdaptiveMemoryFNadam`, and `AdaptiveMemoryFAdamax` are provided in addition.
 
 #### `class_d_related_work_optimizers.py`
 
 Implements the representative related-work methods:
 
-- `AdaGL`
-- `FCSGD_GL`
-- `FCAdam_GL`
+- `AdaGL` (K = 10)
+- `FCSGD_GL` (K = 11, Bernoulli retention probability p = 0.5)
+- `FCAdam_GL` (K = 11, p = 0.5)
 - `AOFGD_SGD`
 - `AOFGD_Adam`
 
@@ -180,31 +189,31 @@ Implements the representative related-work methods:
 
 #### `A_00a_himmelblau_perturbation_and_minima.py`
 
-Defines the standard and additively perturbed Himmelblau surfaces, determines the minima of the perturbed surface, and stores the resolved minima together with a fingerprint of the perturbation for use by the optimization experiment.
+Defines the standard and additively perturbed Himmelblau surfaces, determines the minima of the perturbed surface, and stores the resolved minima together with a fingerprint of the perturbation for use by the optimization experiment. Output: `himmelblau_perturbation_and_minima/`.
 
 #### `A_00b_ackley_perturbation_and_minima.py`
 
-Performs the corresponding perturbation and perturbed-minimum analysis for the Ackley surface and stores the reference information required by the optimization experiment.
+Performs the corresponding perturbation and perturbed-minimum analysis for the Ackley surface and stores the reference information required by the optimization experiment. Output: `ackley_perturbation_and_minima/`.
 
 #### `A_01_himmelblau_loss_surface_optimization.py`
 
-Runs repeated optimization experiments on the standard and additively perturbed Himmelblau surfaces using the final optimizer suite.
+Runs repeated optimization experiments on the standard and additively perturbed Himmelblau surfaces using the full optimizer suite: 21 optimizers × 4 settings = 84 configurations, 100 runs each, 250 steps per run.
 
-For the perturbed variant, the script loads the reference minima produced by `A_00a_himmelblau_perturbation_and_minima.py` and verifies that the perturbation definition agrees with the stored fingerprint.
+For the perturbed variant, the script loads the reference minima produced by `A_00a_himmelblau_perturbation_and_minima.py` and refuses to run unless the perturbation definition agrees with the stored fingerprint. Output: `himmelblau_comparison_fin_std_add_3_lr_vderiv_grid/`.
 
 #### `A_02_ackley_loss_surface_optimization.py`
 
 Runs the corresponding experiments on the standard and additively perturbed Ackley surfaces.
 
-For the perturbed variant, the script loads the reference minima produced by `A_00b_ackley_perturbation_and_minima.py` and verifies the perturbation definition before running the experiment.
+For the perturbed variant, the script loads the reference minima produced by `A_00b_ackley_perturbation_and_minima.py` and verifies the perturbation definition before running the experiment. Output: `ackley_comparison_fin_std_add_5_lr_vderiv_grid/`.
 
 #### `A_03_analyze_himmelblau.py`
 
-Analyzes the Himmelblau runs and produces configuration-level and optimizer-level statistics, rankings, human-readable reports, CSV and JSON outputs, and plots.
+Analyzes the Himmelblau runs and produces configuration-level and optimizer-level statistics, rankings, pooled optimizer and optimizer-group views, human-readable reports, CSV and JSON outputs, and plots. Output: `himmelblau_comparison_fin_std_add_3_lr_vderiv_grid_analysis/`.
 
 #### `A_04_analyze_ackley.py`
 
-Analyzes the Ackley runs and produces the corresponding statistical summaries, rankings, reports, and visualizations.
+Analyzes the Ackley runs and produces the corresponding statistical summaries, rankings, reports, and visualizations. Output: `ackley_comparison_fin_std_add_5_lr_vderiv_grid_analysis/`.
 
 ---
 
@@ -216,39 +225,45 @@ Runs the complete neural-network classification experiment.
 
 The script:
 
-- loads ten public OpenML datasets;
+- loads the ten public OpenML datasets by name;
 - applies the dataset-specific network settings;
 - evaluates six activation functions;
 - evaluates 21 optimizers;
-- sweeps the optimizer-specific parameter settings;
+- sweeps the four optimizer-specific parameter settings;
 - performs 40 repeated runs;
-- records accuracy, macro-F1, precision, recall, timing, and training histories;
-- writes one JSON result file per configuration.
+- records accuracy, macro-F1, precision, recall, timing, completed epochs, best validation loss, and training histories;
+- writes one JSON result file per configuration to `compiled_results_all_experiments/<dataset>/`.
 
 #### `B_02_analyze_neural_network_experiments.py`
 
-Analyzes the classification results.
+Analyzes the classification results stored in `compiled_results_all_experiments/` and writes to `compiled_analysis_October2026/`.
 
 The script computes:
 
-- configuration-level statistics;
-- optimizer-specific rankings;
+- configuration-level statistics (mean, standard deviation, standard error, 95% confidence interval, median, quartiles, extremes);
+- optimizer-specific rankings, based on the best configuration of each optimizer per dataset (highest mean accuracy, ties resolved by mean macro-F1 and then by shorter mean training time);
 - activation rankings;
 - optimizer-group comparisons;
-- activation-family comparisons;
+- activation-family comparisons, including a view without the Weierstrass–Mandelbrot x+sin activation;
 - fractional-order sensitivity;
 - optimizer–activation interaction analyses;
 - cross-dataset summaries;
 - publication-ready PNG and EPS plots;
 - CSV and human-readable reports.
 
+The activation-level, optimizer-group, activation-family, and order-sensitivity views pool all result records found in the input folder.
+
 #### `B_03_activation_optimizer_gradient_probe.py`
 
-Runs an end-to-end gradient diagnostic across the activation functions and optimizer families. It records gradient and update magnitudes, consecutive-gradient coherence, optimizer-state stability, family-specific fractional diagnostics, and training outcomes.
+Runs the end-to-end gradient diagnostic of the appendix on gradient-level diagnostics: the `diabetes` dataset with the classification architecture (one hidden layer of 64 units, batch size 32, 30 epochs, 510 optimization steps per run), the six activations, each fractal activation at the truncation lengths 8, 16, 24, 32 and 64 that do not exceed its deployed length plus the deployed length, and all 21 optimizers at their four settings, with three seeds. This gives 2016 configurations and 6048 runs. It records gradient and update magnitudes, consecutive-gradient coherence, non-finite losses, gradients, updates and optimizer-slot entries, family-specific fractional diagnostics, and training outcomes. Finished runs are written immediately to `activation_optimizer_gradient_probe/run_records.csv`, so an interrupted probe can be resumed.
+
+#### `B_04_analyze_activation_optimizer_probe.py`
+
+Rebuilds every table and figure of the gradient probe from `activation_optimizer_gradient_probe/run_records.csv` without training, and adds further views (gradient-norm and accuracy heatmaps over the whole grid, damping ratios, setting sensitivity, adaptive-memory state, runtime). Output: `activation_optimizer_analysis/`.
 
 #### `B_04_activation_comparison_diagnostics.py`
 
-Performs numerical diagnostics of all six activation functions, including truncation sensitivity, derivative magnitude, finite-precision behaviour, resolved scale structure, gradient realizability, and an optional compact network probe.
+Performs numerical diagnostics of all six activation functions, including truncation sensitivity, derivative magnitude, finite-precision behaviour, resolved scale structure, gradient realizability, and an optional compact network probe. TensorFlow is optional; without it, the NumPy stages run and the network probe is skipped. Output: `activation_comparison_diagnostics/`.
 
 ---
 
@@ -256,9 +271,13 @@ Performs numerical diagnostics of all six activation functions, including trunca
 
 #### `D_01_memory_degeneracy_kernel_analysis.py`
 
-Analyzes the Grünwald–Letnikov memory pipeline independently of the training experiments.
+Analyzes the Grünwald–Letnikov memory pipeline independently of the training experiments and reproduces the appendix on the response of the truncated memory kernel. It requires only NumPy and Matplotlib.
 
-The script studies the GL coefficients, DC gain, persistent-gradient limit, descent safeguard, norm matching, adaptive mixing, safeguard activation, and the conditions under which the memory contribution differs from the ordinary gradient.
+The script studies the GL coefficients, DC gain, persistent-gradient limit, descent safeguard, norm matching, adaptive mixing, safeguard activation, and the conditions under which the memory contribution differs from the ordinary gradient, for every order of the grid ν ∈ {0.75, 1.25, 1.50, 1.75}. Output: `degeneracy_analysis_kernel/`.
+
+#### `D_02_memory_degeneracy_runtime_probe.py`
+
+Records the same quantities per step and per parameter tensor during training, from instrumented subclasses of the optimizer classes used in the experiments, verified against them by trajectory comparison. It additionally records the realized gradient-change ratio ρ_t of each step, so that the measured gradient sequences can be placed on the axis of the kernel analysis.
 
 ---
 
@@ -299,7 +318,7 @@ fractal_activation_functions.py
         │
         ▼
 B_01_run_nn_classification.py
-        │
+        │      compiled_results_all_experiments/
         ▼
 B_02_analyze_neural_network_experiments.py
 ```
@@ -312,7 +331,9 @@ fractal_activation_functions.py
         ├──> B_04_activation_comparison_diagnostics.py
         │
         └──> B_03_activation_optimizer_gradient_probe.py
-                    ▲
+                    ▲           │      activation_optimizer_gradient_probe/run_records.csv
+                    │           ▼
+                    │    B_04_analyze_activation_optimizer_probe.py
                     │
         optimizer implementation modules
 
@@ -320,8 +341,8 @@ class_c_tf_fractional_optimizers_SR.py
         │
 class_minimal_fractional_adaptive_optimizers.py
         │
-        ▼
-D_01_memory_degeneracy_kernel_analysis.py
+        ├──> D_01_memory_degeneracy_kernel_analysis.py
+        └──> D_02_memory_degeneracy_runtime_probe.py
 ```
 
 ---
@@ -372,7 +393,7 @@ Each optimizer is evaluated under four optimizer-specific parameter settings.
 
 ### Standard Optimizers
 
-The standard optimizers are evaluated at four learning rates.
+The standard optimizers are evaluated at four learning rates, 0.5, 1, 2, and 4 times their reference learning rate.
 
 For the classification experiments:
 
@@ -390,7 +411,18 @@ Adadelta:
 0.5, 1.0, 2.0, 4.0
 ```
 
-The surface experiments use the corresponding four-value optimizer-specific learning-rate grids defined in the respective experiment scripts.
+For the surface experiments:
+
+```text
+SGD and Adam:
+0.005, 0.01, 0.02, 0.04
+
+RMSprop:
+0.0025, 0.005, 0.01, 0.02
+
+Adadelta:
+0.5, 1.0, 2.0, 4.0
+```
 
 ### Fractional Orders
 
@@ -403,9 +435,37 @@ The Herrera, GL-Memory, and Adaptive-Memory methods are evaluated with:
 ν = 1.75
 ```
 
-The corresponding order-related parameters of the related-work optimizers are evaluated over the same four-setting design.
+AdaGL, FCSGD_GL, and FCAdam_GL use the same four values as their parameter α.
 
-AOFGD adapts its order during optimization and is evaluated using four initial-order settings.
+AOFGD adapts its order during optimization and is evaluated at four initial orders α_init:
+
+```text
+Classification:  α_init ∈ {0.75, 1.25, 1.50, 1.75},  α_max = max(1.5, α_init)
+Surfaces:        α_init ∈ {0.75, 1.00, 1.25, 1.50},  α_max = 1.5
+```
+
+with α_min = 0.5, Δα = 0.02, convergence-evaluation threshold 0.05, and EMA factor 0.95.
+
+The fractional optimizers keep the reference learning rate of their base optimizer: 10⁻² (SGD-based), 10⁻³ (Adam- and RMSprop-based), and 1.0 (Adadelta-based) in the classification experiments, and 0.01 (SGD- and Adam-based), 0.005 (RMSprop-based), and 1.0 (Adadelta-based) in the surface experiments.
+
+### Fixed Parameters
+
+```text
+SGD momentum:                 0.9, no Nesterov
+RMSprop:                      ρ = 0.9, no momentum, not centered
+Adam:                         β1 = 0.9, β2 = 0.999, no AMSGrad
+Adadelta:                     ρ = 0.95
+Numerical stabilizer:         1e-7
+Herrera factor ε:             1e-6
+GL-Memory:                    K = 6, unnormalized coefficients
+Adaptive-Memory:              K = 4, normalized coefficients, λ ∈ [0, 0.30], λ0 = 0.10,
+                              adaptation step 0.01, mixing EMA 0.90, stability EMA 0.95,
+                              stability threshold 0.25, stability clip 10,
+                              loss EMA 0.95, loss-worsening tolerance 1e-4,
+                              loss-triggered mixing decrease 0.02, no warm-up
+AdaGL:                        K = 10
+FCSGD_GL / FCAdam_GL:         K = 11, p = 0.5
+```
 
 ---
 
@@ -414,7 +474,9 @@ AOFGD adapts its order during optimization and is evaluated using four initial-o
 Each surface is evaluated in two variants:
 
 - standard;
-- additive finite Weierstrass-type perturbation.
+- additive finite Weierstrass-type perturbation,
+  f_add(x, y) = f(x, y) + α_add Σ_{k=0}^{J} a_P^k [cos(b_P^k π x) + cos(b_P^k π y)],
+  with α_add = 0.2, a_P = 0.55, J = 8, and b_P = 2.4 (Ackley) or b_P = 2.5 (Himmelblau).
 
 The same 21 optimizers are evaluated on every variant.
 
@@ -441,9 +503,9 @@ Across all four variants:
 = 33,600 surface-optimization runs
 ```
 
-The starting points are generated before optimization and shared across optimizer configurations within each repeated run. This ensures that the compared optimizers start from identical coordinates for a given run.
+Each run takes 250 optimization steps. The starting points are generated before optimization and shared across optimizer configurations within each repeated run. Each starting point lies at a fixed radius from a reference minimum (2.0 on Himmelblau, cycling through the four minima; 2.5 on Ackley, around the global minimum), with the angles of all runs sharing a reference minimum spread evenly over the full circle. This ensures that the compared optimizers start from identical coordinates for a given run, while the set of runs covers all directions around each minimum.
 
-The perturbed variants use the resolved minima generated by the corresponding `A_00` scripts. Success and distance statistics can therefore be evaluated with respect to the surface variant that was actually optimized.
+The perturbed variants use the resolved minima generated by the corresponding `A_00` scripts. Success and distance statistics are therefore evaluated with respect to the surface variant that was actually optimized; the distance to the nearest base-surface minimum is recorded alongside. A run counts as a success if its final point lies within a distance of 0.3 of a minimum. The analysis also reports the gap to the lowest objective value over the resolved minima of each variant and the corresponding normalized regret.
 
 ---
 
@@ -476,7 +538,24 @@ Across ten datasets:
 
 The optimizer-specific parameter search is balanced so that every optimizer contributes four candidate settings.
 
-**Reproduction note:** The totals above describe the final experimental design reported in the manuscript. Reproducing those totals requires the executed classification runner to use the full four-setting grid for each of the 21 optimizers (including fractional order `1.75` where applicable). Verify the active settings in `B_01_run_nn_classification.py` against this documented grid before starting a full reproduction run. Neither GitHub repository is assigned a separate archival DOI.
+`B_01_run_nn_classification.py` is configured with this complete grid: all ten datasets, all six activations, all 21 optimizers, the four learning rates of each standard optimizer, and the four order-related settings of each fractional optimizer. The 40 run seeds are the consecutive integers 238974, …, 239013. The tested learning rate (standard optimizers) or order-related parameter (fractional optimizers) is stored in the `vderiv` field of each result file.
+
+Each run uses a new shuffled 70/30 split of the dataset with the run seed as random state; the features are min–max scaled on the training part. The held-out part is used both as validation data during training and as the test partition. Training runs for the full epoch budget without early stopping. All networks use Glorot-uniform initialization with a fixed initializer seed.
+
+| Dataset | Task | Width *n* | Hidden layers | Batch size | Epochs |
+|---|---|---|---|---|---|
+| climate-model-simulation-crashes | binary | 32 | 1 | 32 | 30 |
+| diabetes | binary | 64 | 1 | 32 | 30 |
+| ionosphere | binary | 128 | 1 | 32 | 30 |
+| tic-tac-toe | binary | 64 | 1 | 32 | 25 |
+| vertebra-column | binary | 32 | 1 | 16 | 30 |
+| glass | multi-class | 64 | 2 (*n*, 2*n*) | 32 | 30 |
+| iris | multi-class | 32 | 2 (*n*, 2*n*) | 16 | 30 |
+| seeds | multi-class | 64 | 2 (*n*, 2*n*) | 32 | 30 |
+| vehicle | multi-class | 128 | 2 (*n*, 2*n*) | 32 | 25 |
+| wine | multi-class | 64 | 2 (*n*, 2*n*) | 32 | 30 |
+
+Multi-class networks apply batch normalization and dropout (0.2) after each hidden layer; binary networks consist of one dense hidden layer followed by the output layer.
 
 The analysis keeps several views separate:
 
@@ -490,6 +569,8 @@ The analysis keeps several views separate:
 - cross-dataset summaries.
 
 This makes it possible to distinguish the strongest observed configuration from the broader average behaviour of an optimizer or activation family.
+
+**Archiving:** Neither GitHub repository is assigned a separate archival DOI.
 
 ---
 
@@ -533,9 +614,9 @@ The analysis includes:
 
 ### Activation–Optimizer Gradient Probe
 
-`B_03_activation_optimizer_gradient_probe.py` extends the activation diagnostics to the actual optimizer interactions.
+`B_03_activation_optimizer_gradient_probe.py` extends the activation diagnostics to the actual optimizer interactions, and `B_04_analyze_activation_optimizer_probe.py` rebuilds its tables and figures from the saved records.
 
-The script records:
+The probe records:
 
 - global gradient norms;
 - parameter-update norms;
@@ -553,9 +634,9 @@ This connects the numerical properties of the activation functions with the mech
 
 ### Memory-Kernel Diagnostic
 
-`D_01_memory_degeneracy_kernel_analysis.py` studies the memory mechanism independently of network training.
+`D_01_memory_degeneracy_kernel_analysis.py` studies the memory mechanism independently of network training, and `D_02_memory_degeneracy_runtime_probe.py` records the same quantities during training.
 
-It examines:
+They examine:
 
 - GL coefficient sequences;
 - truncated DC gain;
@@ -587,15 +668,10 @@ Create the environment with:
 conda create -n fractal-fractional python=3.8.19
 conda activate fractal-fractional
 
-pip install \
-    numpy==1.23.5 \
-    scipy==1.10.1 \
-    pandas==2.0.3 \
-    scikit-learn==1.3.2 \
-    tensorflow==2.10.0 \
-    matplotlib==3.7.5 \
-    seaborn==0.13.2
+pip install -r requirements.txt
 ```
+
+The optimizer classes use the `optimizer_v2` API of `tf.keras`, which is the default optimizer API of TensorFlow 2.10. The OpenML datasets are downloaded on first use; saving animations of the surface runs (disabled by default) additionally requires FFmpeg.
 
 ---
 
@@ -626,10 +702,29 @@ python B_02_analyze_neural_network_experiments.py
 ```bash
 python B_04_activation_comparison_diagnostics.py
 python B_03_activation_optimizer_gradient_probe.py
+python B_04_analyze_activation_optimizer_probe.py
 python D_01_memory_degeneracy_kernel_analysis.py
+python D_02_memory_degeneracy_runtime_probe.py
 ```
 
 The analysis scripts operate on saved experimental records and do not rerun the main optimization or classification experiments.
+
+### Output Folders
+
+| Script | Output folder |
+|---|---|
+| `A_00a_himmelblau_perturbation_and_minima.py` | `himmelblau_perturbation_and_minima/` |
+| `A_00b_ackley_perturbation_and_minima.py` | `ackley_perturbation_and_minima/` |
+| `A_01_himmelblau_loss_surface_optimization.py` | `himmelblau_comparison_fin_std_add_3_lr_vderiv_grid/` |
+| `A_02_ackley_loss_surface_optimization.py` | `ackley_comparison_fin_std_add_5_lr_vderiv_grid/` |
+| `A_03_analyze_himmelblau.py` | `himmelblau_comparison_fin_std_add_3_lr_vderiv_grid_analysis/` |
+| `A_04_analyze_ackley.py` | `ackley_comparison_fin_std_add_5_lr_vderiv_grid_analysis/` |
+| `B_01_run_nn_classification.py` | `compiled_results_all_experiments/` |
+| `B_02_analyze_neural_network_experiments.py` | `compiled_analysis_October2026/` |
+| `B_03_activation_optimizer_gradient_probe.py` | `activation_optimizer_gradient_probe/` |
+| `B_04_analyze_activation_optimizer_probe.py` | `activation_optimizer_analysis/` |
+| `B_04_activation_comparison_diagnostics.py` | `activation_comparison_diagnostics/` |
+| `D_01_memory_degeneracy_kernel_analysis.py` | `degeneracy_analysis_kernel/` |
 
 ---
 

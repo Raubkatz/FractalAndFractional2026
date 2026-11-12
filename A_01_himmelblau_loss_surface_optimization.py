@@ -2,29 +2,67 @@
 # -*- coding: utf-8 -*-
 
 """
-fractional_himmelblau_optimizer_comparison.py
+A_01_himmelblau_loss_surface_optimization.py
 
-This script compares TensorFlow optimizers on several Himmelblau-type objective
-surfaces, including fractional/fractal perturbation variants.
+Surface-optimization experiment on the Himmelblau function. The 21 optimizers
+of the study, each at four optimizer-specific parameter settings, are run from
+controlled starting points on the standard surface and on its additive
+fractal perturbation.
 
-Multi-run experimental design
------------------------------
-This version extends the single-run comparison to many repeated runs. Each run
-uses:
+Experimental design
+-------------------
+    objective variants   standard_himmelblau, fractional_himmelblau_additive
+    optimizers           21, in five groups (see below)
+    settings             four per optimizer, 21 x 4 = 84 configurations
+    repeated runs        N_RUNS = 100 per configuration and variant
+    steps per run        MAX_STEPS
+
+The four standard optimizers are evaluated at 0.5, 1, 2 and 4 times their
+reference learning rate (STANDARD_LEARNING_RATE_GRID):
+
+    SGD, Adam   0.005, 0.01, 0.02, 0.04
+    RMSprop     0.0025, 0.005, 0.01, 0.02
+    Adadelta    0.5, 1.0, 2.0, 4.0
+
+The fractional optimizers keep the reference learning rate of their base
+optimizer and sweep their order-related parameter instead:
+
+    Herrera, GL-Memory, Adaptive-Memory   nu         in FRACTIONAL_ORDER_GRID
+    AdaGL, FCSGD_GL, FCAdam_GL            alpha      in FRACTIONAL_ORDER_GRID
+    AOFGD_SGD, AOFGD_Adam                 alpha_init in AOFGD_INITIAL_ORDER_GRID
+
+with FRACTIONAL_ORDER_GRID = {0.75, 1.25, 1.50, 1.75} and
+AOFGD_INITIAL_ORDER_GRID = {0.75, 1.00, 1.25, 1.50}.
+
+Optimizer groups
+----------------
+    1. Standard: SGD, RMSprop, Adam, Adadelta
+    2. Herrera-type fractional: FSGD, FRMSprop, FAdam, FAdadelta
+    3. GL-Memory fractional: MemoryFSGD, MemoryFRMSprop, MemoryFAdam,
+       MemoryFAdadelta
+    4. Adaptive-Memory fractional: AdaptiveMemoryFSGD, AdaptiveMemoryFRMSprop,
+       AdaptiveMemoryFAdam, AdaptiveMemoryFAdadelta
+    5. Related work (class_d): AdaGL, FCSGD_GL, FCAdam_GL, AOFGD_SGD,
+       AOFGD_Adam
+
+Starting points
+---------------
+Each run uses
 
     1. a reproducible base run seed,
-    2. a reproducible optimizer-specific seed,
-    3. one common starting point shared by every optimizer in the run,
+    2. a reproducible configuration-specific seed,
+    3. one common starting point shared by every optimizer configuration in
+       the run,
     4. a fixed-radius starting point around a selected Himmelblau minimum.
 
-The starting-point design is intentionally controlled. The complete list of
-starting points is generated once, before any optimization, by
-generate_common_start_points(). It contains exactly one point per run, and
-within a run that same point is used by every optimizer. No starting point is
-drawn at random.
+The complete list of starting points is generated once, before any
+optimization, by generate_common_start_points(). It contains exactly one point
+per run, and within a run that same point is used by every optimizer. No
+starting point is drawn at random.
 
-For each run, one reference Himmelblau minimum is selected as before. The runs
-that share a reference minimum are then radiated around it: their angles are
+For each run, one reference Himmelblau minimum is selected
+(START_MINIMUM_SELECTION_MODE = "cycle" cycles through the four minima). The
+runs that share a reference minimum are radiated around it: their angles are
 spread evenly over the full circle, so that a group of n such runs uses the
 angles
 
@@ -44,25 +82,66 @@ domain [XMIN, XMAX] x [YMIN, YMAX]. If an angle gives a point outside the
 domain, the angle is advanced deterministically in steps of
 START_POINT_ANGLE_SEARCH_INCREMENT, up to START_POINT_MAX_RESAMPLE_ATTEMPTS
 times. If no valid angle is found, the script falls back to a clipped point in
-the direction of the original angle.
+the direction of the requested angle.
 
-This allows later analysis of:
-
-    - mean final loss,
-    - standard deviation of final loss,
-    - best and worst final loss,
-    - mean best loss reached during the trajectory,
-    - mean distance to the nearest standard Himmelblau minimum,
-    - success rate according to a distance threshold,
-    - average number of steps,
-    - wall-clock runtime per optimizer run,
-    - aggregate runtime statistics across runs,
-    - stability across optimizer-specific starting points.
-
-The starting points are generated once from N_RUNS and the selected minimum
+The starting points are generated from N_RUNS and the selected minimum
 indices alone, without any random draw. They are saved in run_design.json and
-then reused for all objective variants and for every optimizer, so that a given
+reused for both objective variants and for every optimizer, so that a given
 run index denotes the same starting point throughout the experiment.
+
+Objective variants
+------------------
+The base Himmelblau function is
+
+    H(x, y) = (x^2 + y - 11)^2 + (x + y^2 - 7)^2.
+
+It has four known global minima:
+
+    ( 3.000000,  2.000000)
+    (-2.805118,  3.131312)
+    (-3.779310, -3.283186)
+    ( 3.584428, -1.848126)
+
+1. Standard Himmelblau
+----------------------
+    f_0(x, y) = H(x, y)
+
+2. Additive fractal Himmelblau
+------------------------------
+    f_add(x, y)
+      = H(x, y)
+        + lambda * sum_{k=0}^{K} a^k [
+              cos(b^k pi x) + cos(b^k pi y)
+          ]
+
+with a = FRAC_A = 0.55, b = FRAC_B = 2.5, K = FRAC_K_MAX = 8 and
+lambda = FRAC_LAMBDA_ADDITIVE = 0.2.
+
+Reference minima
+----------------
+The minima of the perturbed variant are resolved before any optimization by
+A_00a_himmelblau_perturbation_and_minima.py and loaded from
+REFERENCE_MINIMA_FILE. The script refuses to run if the perturbation recorded
+in that file differs from the perturbation defined here. On the perturbed
+variant, distance and success refer to these minima; the distance to the
+nearest standard Himmelblau minimum is recorded alongside. The standard variant
+uses the analytic minima.
+
+Recorded quantities
+-------------------
+The per-run files keep the trajectories, losses, gradient norms, fractional
+orders, starting points and runtime measurements. The aggregate files contain,
+per optimizer configuration:
+
+    - mean, standard deviation, best and worst final loss,
+    - mean best loss reached during the trajectory,
+    - mean distance to the nearest minimum of the optimized variant and to the
+      nearest standard Himmelblau minimum,
+    - success rate according to the distance threshold
+      SUCCESS_DISTANCE_THRESHOLD,
+    - gap to the floor of the optimized variant and normalized regret,
+    - average number of steps,
+    - wall-clock runtime per optimizer run and its statistics across runs.
 
 Output structure
 ----------------
@@ -88,46 +167,18 @@ The script creates:
                 convergence.png
                 gradient_norms.png
                 fractional_orders.png
-                <objective_name>_optimization.mp4
+                <objective_name>_optimization.mp4   (SAVE_PER_RUN_ANIMATIONS)
 
             run_001_seed_<seed>/
                 ...
 
-The per-run files keep the detailed trajectories, losses, gradient norms,
-fractional orders, optimizer-specific starting points, and runtime measurements.
-The aggregate files contain the statistics needed for later plotting and
-reporting, including runtime statistics.
-
-The base Himmelblau function is
-
-    H(x, y) = (x^2 + y - 11)^2 + (x + y^2 - 7)^2.
-
-It has four known global minima:
-
-    ( 3.000000,  2.000000)
-    (-2.805118,  3.131312)
-    (-3.779310, -3.283186)
-    ( 3.584428, -1.848126)
-
-This script evaluates two objective variants:
-
-1. Standard Himmelblau
-----------------------
-    f_0(x, y) = H(x, y)
-
-2. Additive fractional/fractal Himmelblau
------------------------------------------
-    f_add(x, y)
-      = H(x, y)
-        + lambda * sum_{k=0}^{K} a^k [
-              cos(b^k pi x) + cos(b^k pi y)
-          ]
+The results are analyzed by A_03_analyze_himmelblau.py.
 
 Plot ordering
 -------------
 All trajectory, convergence, gradient-norm, fractional-order, and animation
-plots order optimizers by convergence quality. The default ranking is ascending
-final objective value:
+plots order optimizers by convergence quality. The ranking is ascending final
+objective value:
 
     best optimizer = lowest final_loss.
 
@@ -137,24 +188,18 @@ The parameters TRAJECTORY_LINEWIDTH, CONVERGENCE_LINEWIDTH, GRADIENT_LINEWIDTH,
 ORDER_LINEWIDTH, and ANIMATION_LINEWIDTH control line thickness. Line styles are
 cycled from LINE_STYLES, and colors are drawn from COLOR_PALETTE_A.
 
-Required local optimizer files for the active optimizer selection:
-
+Required local modules
+----------------------
     class_b_tf_fractional_optimizers_OHA.py
     class_c_tf_fractional_optimizers_SR.py
     class_minimal_fractional_adaptive_optimizers.py
     class_d_related_work_optimizers.py
 
-Active optimizer selection
---------------------------
-The active comparison is restricted to four optimizers per level:
-
-    1. Standard: SGD, RMSprop, Adam, Adadelta
-    2. Herrera-style fractional: FSGD, FRMSprop, FAdam, FAdadelta
-    3. Memory fractional: MemoryFSGD, MemoryFRMSprop, MemoryFAdam, MemoryFAdadelta
-    4. Minimal adaptive memory fractional: AdaptiveMemoryFSGD,
-       AdaptiveMemoryFRMSprop, AdaptiveMemoryFAdam, AdaptiveMemoryFAdadelta
-    5. Related-work fractional (class_d): AdaGL, FCSGD_GL, FCAdam_GL,
-       AOFGD_SGD, AOFGD_Adam
+Run order
+---------
+    python3 A_00a_himmelblau_perturbation_and_minima.py
+    python3 A_01_himmelblau_loss_surface_optimization.py
+    python3 A_03_analyze_himmelblau.py
 """
 
 from __future__ import annotations
@@ -220,13 +265,12 @@ DTYPE = tf.float32
 tf.keras.backend.set_floatx("float32")
 
 # Multi-run settings
-#N_RUNS = 100
 N_RUNS = 100
 RUN_SEEDS = [1000 + i for i in range(N_RUNS)]
 
 START_POINT_MODE = "common_radius_around_minimum"
 
-# Legacy options kept for compatibility with older start-point modes.
+# Sampling ranges of the alternative "uniform" start-point mode.
 START_POINT_X_RANGE = (-5.5, 5.5)
 START_POINT_Y_RANGE = (-5.5, 5.5)
 
@@ -255,7 +299,7 @@ SAVE_PER_RUN_PLOTS = True
 SAVE_PER_RUN_ANIMATIONS = False
 SAVE_AGGREGATE_JSON = True
 
-SUCCESS_DISTANCE_THRESHOLD = 0.3 #0.25 before
+SUCCESS_DISTANCE_THRESHOLD = 0.3
 
 # -----------------------------------------------------------------------------
 # Reference minima of each objective variant.
@@ -281,7 +325,8 @@ REFERENCE_DESCENT_GROW = 1.2
 REFERENCE_DESCENT_SHRINK = 0.5
 REFERENCE_EPSILON_RADIUS = 1e-12
 
-# "legacy"  -> ranking unchanged (mean_final_loss, ...)
+# "legacy"  -> rank by mean final loss, mean best loss, success rate and mean
+#              distance to the nearest standard minimum
 # "variant" -> rank by the normalized regret against the variant's own floor
 AGGREGATE_RANKING_METRIC = "legacy"
 
@@ -370,7 +415,6 @@ COLOR_PALETTE_B = [
 FRAC_A = 0.55
 FRAC_B = 2.5
 FRAC_K_MAX = 8
-#FRAC_LAMBDA_ADDITIVE = 0.15
 FRAC_LAMBDA_ADDITIVE = 0.2
 
 # Known Himmelblau minima
@@ -384,7 +428,8 @@ HIMMELBLAU_MINIMA = np.array(
     dtype=np.float32,
 )
 
-# Optimizer defaults
+# Optimizer defaults. The single orders below are used only for a configuration
+# without an order; every configuration of the grid carries its own order.
 HERRERA_VDERIV = 1.75
 MEMORY_VDERIV = 1.75
 MEMORY_HISTORY_SIZE = 6
@@ -417,8 +462,8 @@ LR_ADADELTA = 1.0
 LR_ADAMW = 5e-3
 
 # Hyperparameter grids
-# The standard optimizers are evaluated at four learning rates centered around
-# the original defaults. The original learning rate remains one grid point.
+# The standard optimizers are evaluated at 0.5, 1, 2 and 4 times their
+# reference learning rate, so the reference learning rate is one grid point.
 STANDARD_LEARNING_RATE_MULTIPLIERS = [0.5, 1.0, 2.0, 4.0]
 STANDARD_LEARNING_RATE_GRID = {
     "SGD": [LR_SGD * m for m in STANDARD_LEARNING_RATE_MULTIPLIERS],
@@ -432,8 +477,8 @@ STANDARD_LEARNING_RATE_GRID = {
 FRACTIONAL_ORDER_GRID = [0.75, 1.25, 1.50, 1.75]
 
 # AOFGD adapts its order inside [AOFGD_ALPHA_MIN, AOFGD_ALPHA_MAX]. Its swept
-# value is therefore the initial order alpha_init and must remain inside the
-# original adaptive interval. The candidate count stays four.
+# value is therefore the initial order alpha_init, and all four initial orders
+# lie inside that interval.
 AOFGD_INITIAL_ORDER_GRID = [0.75, 1.00, 1.25, 1.50]
 
 SGD_MOMENTUM = 0.9
@@ -464,7 +509,7 @@ ADAGL_HISTORY_SIZE = 10
 
 # FCSGD_GL / FCAdam_GL (Zhou, Zhao & Huang, 2023)
 FCGL_ALPHA = 0.9
-FCGL_HISTORY_SIZE = 11          # 11 slots = 1 current + 10 historical, matching paper Eq. 10
+FCGL_HISTORY_SIZE = 11          # 11 slots = 1 current + 10 historical, Eq. 10 of Zhou et al. (2023)
 FCGL_PERTURBATION_PROB = 0.5
 
 # AOFGD (Xiang et al., 2025)
@@ -826,8 +871,8 @@ def generate_starting_points() -> List[Dict[str, Any]]:
     In the default mode the starting points come from the common list built by
     generate_common_start_points(): one point per run, placed at a fixed radius
     around the selected Himmelblau minimum, and shared by every optimizer in
-    that run. The legacy per-optimizer and uniform modes are kept unchanged
-    below.
+    that run. START_POINT_MODE also provides a per-optimizer radius mode, a
+    uniform mode and a fixed starting point.
     """
     rng = np.random.default_rng(GLOBAL_SEED)
     run_design = []

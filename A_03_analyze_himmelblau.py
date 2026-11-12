@@ -2,21 +2,21 @@
 # -*- coding: utf-8 -*-
 
 """
-analyze_fractional_himmelblau_many_runs.py
+A_03_analyze_himmelblau.py
 
-Analysis script for the multi-run fractional Himmelblau optimizer comparison.
+Analysis script for the multi-run Himmelblau surface-optimization experiment.
 
 Purpose
 -------
 This script loads all saved optimizer runs produced by:
 
-    fractional_himmelblau_optimizer_comparison_lr_vderiv_grid.py
+    A_01_himmelblau_loss_surface_optimization.py
 
 or by a compatible script that writes the same result structure.
 
 It reads the individual run results for each objective and optimizer, computes
 aggregate statistics, writes machine-readable tables, and writes a human-readable
-text report.
+text report. It does not rerun any optimization.
 
 Expected input structure
 ------------------------
@@ -96,7 +96,9 @@ For each objective and optimizer--hyperparameter configuration, the script compu
         mean, standard deviation, standard error, 95% confidence interval,
         median, quartiles, minimum, maximum
 
-    - distance to the nearest standard Himmelblau minimum:
+    - distance to the nearest minimum selected by SUCCESS_CRITERION (by
+      default the minima of the optimized variant), with the distance to the
+      nearest standard Himmelblau minimum reported alongside:
         mean, standard deviation, standard error, 95% confidence interval,
         median, quartiles, minimum, maximum
 
@@ -121,20 +123,21 @@ Hyperparameter-grid strategy
 The run script stores each learning-rate or fractional-order candidate as a
 separate configuration_label. This analysis first aggregates every configuration
 independently over the loaded runs, then selects the best-ranked configuration
-of each base optimizer using the ranking rule below. The existing optimizer-level
+of each base optimizer using the ranking rule below. The optimizer-level
 tables, plots, winners, and reports therefore compare one selected configuration
-per optimizer, while the additional configuration-level CSV/JSON files retain
-the complete grid results.
+per optimizer, while the configuration-level CSV/JSON files retain the complete
+grid results. Pooled views over all settings of an optimizer and over all
+optimizers of a group are written in addition.
 
 Ranking rule
 ------------
-The main ranking is deliberately conservative and interpretable:
+The main ranking is conservative and interpretable:
 
-    1. lowest mean_final_loss
-    2. lowest mean_best_loss_reached
-    3. highest success_rate
-    4. lowest mean_distance_to_nearest_standard_himmelblau_minimum
-    5. lowest mean_runtime_seconds
+    1. lowest mean final loss
+    2. lowest mean best loss reached
+    3. highest success rate
+    4. lowest mean distance (distance criterion set by SUCCESS_CRITERION)
+    5. lowest mean runtime
 
 This ranking is written to the objective-specific rank tables and the combined
 rank table. Lower rank is better.
@@ -195,8 +198,7 @@ CONFIDENCE_LEVEL_Z = 1.96
 #               and stored per run as distance_to_nearest_variant_minimum and
 #               success_variant_minimum, so on a perturbed variant the
 #               criterion is evaluated on the perturbed objective.
-#   "base"    : the minima of the unperturbed Himmelblau surface, which is what
-#               earlier versions of this script reported.
+#   "base"    : the minima of the unperturbed Himmelblau surface.
 # Both criteria are always computed and written out as
 # variant_distance_*/variant_success_* and base_distance_*/base_success_*.
 # This setting only decides which of the two fills the headline columns
@@ -282,7 +284,7 @@ plt.rcParams.update({
 
 
 # Plot-only abbreviations. These are used only for axis labels and tick labels
-# in figures. Tables, CSV files, and reports keep the original optimizer names.
+# in figures. Tables, CSV files, and reports keep the full optimizer names.
 PLOT_OPTIMIZER_LABELS: Dict[str, str] = {
     "SGD": "SGD",
     "RMSprop": "RMSprop",
@@ -562,7 +564,7 @@ def limit_results_to_max_runs(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]
     restarted run_idx numbering cannot cause more than the requested number of
     actual repeated runs to be included. All optimizer/configuration results
     belonging to the same selected seeds are kept together. If seed information
-    is unavailable, run_idx is used as a compatibility fallback.
+    is unavailable, run_idx is used as a fallback.
 
     MAX_RUNS_TO_LOAD = None loads all available runs.
     """
@@ -782,9 +784,9 @@ def normalize_results_to_dataframe(results: List[Dict[str, Any]]) -> pd.DataFram
             denom = max(abs(record["first_loss"]), 1e-12)
             record["loss_improvement_relative"] = record["loss_improvement_absolute"] / denom
 
-        # Results written before the perturbed-minimum stage existed carry only
-        # the base-surface distance. Fall back to it so that such files still
-        # analyse, with the two criteria then identical by construction.
+        # A result file without the variant distance carries only the
+        # base-surface distance. It is then used for both criteria, which
+        # coincide by construction.
         if not np.isfinite(record[VARIANT_DISTANCE_COLUMN]):
             record[VARIANT_DISTANCE_COLUMN] = record[BASE_DISTANCE_COLUMN]
             record["success_variant_minimum"] = record["success_nearest_minimum"]
@@ -1114,13 +1116,12 @@ def add_rank_columns(stats_df: pd.DataFrame) -> pd.DataFrame:
 def select_best_configuration_per_optimizer(stats_df: pd.DataFrame) -> pd.DataFrame:
     """
     Select the best hyperparameter configuration of each optimizer independently
-    for every objective, using exactly the same ranking rule as the original
-    optimizer-level analysis.
+    for every objective, using the ranking rule of the optimizer-level analysis.
 
     The configuration-level statistics are ranked first. The best-ranked
     configuration of each optimizer is retained, and the retained rows are then
-    ranked again across optimizers so that all existing optimizer-level tables,
-    plots, winners, and reports keep their original meaning.
+    ranked again across optimizers, so that the optimizer-level tables, plots,
+    winners, and reports compare one selected configuration per optimizer.
     """
     selected_frames = []
 
@@ -1498,8 +1499,8 @@ def make_objective_plots(
 
 
     # -------------------------------------------------------------------------
-    # Additional transparent aggregation views.
-    # These do NOT replace the original best-configuration-per-optimizer plots.
+    # Pooled aggregation views, written in addition to the
+    # best-configuration-per-optimizer plots.
     # -------------------------------------------------------------------------
     pooled_scope = "all parameters and runs pooled"
 

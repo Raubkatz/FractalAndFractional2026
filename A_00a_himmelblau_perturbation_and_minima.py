@@ -14,7 +14,7 @@ which the fractal perturbation of the Himmelblau surface is defined. It
     4) writes those minima together with a fingerprint of the perturbation
        to himmelblau_perturbed_reference_minima.json.
 
-The optimization script A_01b_himmelblau_loss_surface_optimization.py loads that
+The optimization script A_01_himmelblau_loss_surface_optimization.py loads that
 file for the perturbed variant and refuses to run if its own perturbation
 constants, base minima or objective values disagree with the fingerprint. The
 standard variant needs no file, because its minima are the analytic ones.
@@ -22,7 +22,7 @@ standard variant needs no file, because its minima are the analytic ones.
 Run this first:
 
     python3 A_00a_himmelblau_perturbation_and_minima.py
-    python3 A_01b_himmelblau_loss_surface_optimization.py
+    python3 A_01_himmelblau_loss_surface_optimization.py
 
 Outputs
 -------

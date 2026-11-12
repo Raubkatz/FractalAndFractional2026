@@ -1,86 +1,70 @@
 """
-memory_fractional_optimizers_legacy.py  (corrected and extended)
+class_c_tf_fractional_optimizers_SR.py
 
-Legacy TensorFlow / Keras implementations of explicit memory-based fractional
-(Grunwald-Letnikov) optimizers.
+TensorFlow / Keras implementations of the explicit memory-based fractional
+(Grunwald-Letnikov) optimizers of the study (GL-Memory group).
 
 =============================================================================
-ANALYSIS OF THE ORIGINAL IMPLEMENTATION AND CORRECTIONS APPLIED
+CONSTRUCTION
 =============================================================================
 
-The original file was mathematically faithful to the naive substitution
+The update direction is the short-memory Grunwald-Letnikov gradient
+
     g_t^(nu) = sum_{k=0}^{K-1} c_k^(nu) g_{t-k}
-but contained three effects that made these optimizers systematically
-underperform every other family, plus one efficiency problem. All four are
-corrected here; the concept (fixed-order short-memory GL gradient inside an
-otherwise unchanged base optimizer) is unchanged.
 
-(1) DC-GAIN COLLAPSE (main performance bug, nu < 1).
+inside an otherwise unchanged base optimizer. Three mechanisms make this
+direction usable as an optimizer input; all three are on by default.
+
+(1) NORM MATCHING (norm_match=True).
     The GL coefficients satisfy sum_{k=0}^{inf} c_k^(nu) = 0 for nu > 0.
     Truncated at K terms, the sum ("DC gain": the response to a constant
-    gradient) is tiny:
-        nu=0.90, K=8 :  sum c_k = +0.0181
+    gradient) is small:
         nu=0.75, K=6 :  sum c_k = +0.0809
-    In a smooth descent phase, where consecutive gradients are similar,
-    the effective gradient was therefore 2-8 % of the raw gradient. For
-    MemoryFSGD and MemoryFAdadelta this is a hidden ~50x learning-rate
-    reduction; for MemoryFAdam/RMSprop the ratio update hides part of it,
-    but the signal-vs-epsilon balance and the m/v statistics still degrade.
-    FIX: norm matching (default on): the fractional gradient is rescaled to
-    the L2 norm of the current raw gradient,
+        nu=1.25, K=6 :  sum c_k = -0.0282
+    In a smooth descent phase, where consecutive gradients are similar, the
+    raw fractional gradient is therefore a small fraction of the raw
+    gradient, which would act as a hidden learning-rate reduction. The
+    fractional gradient is rescaled to the L2 norm of the current raw
+    gradient,
         g_hat^(nu) = g^(nu) * ||g_t|| / (||g^(nu)|| + eps),
     so the memory term contributes *direction*, while the step magnitude
-    stays on the scale the base optimizer was tuned for. This is the same
-    norm-matching step used by the AdaptiveMemory* family.
+    stays on the scale the base optimizer was tuned for. The AdaptiveMemory*
+    family uses the same norm-matching step.
 
-(2) NEGATIVE DC GAIN FOR nu > 1 (anti-descent bug).
-    For the orders nu in {1.25, 1.5} used in the experiments, the truncated
-    coefficient sum is NEGATIVE (e.g. nu=1.5, K=8: sum c_k = -0.0161).
-    Under near-constant gradients the update direction therefore pointed
-    UPHILL. Norm matching preserves direction, so it does not repair this.
-    FIX: descent safeguard (default on): if <g^(nu), g_t> <= 0 for a
-    variable, the raw gradient is used for that variable in that step.
-    The memory term is used whenever it is descent-compatible and dropped
-    when it is not.
+(2) DESCENT SAFEGUARD (descent_check=True).
+    For nu > 1 the truncated coefficient sum is negative (e.g. nu=1.5, K=6:
+    sum c_k = -0.0273), so under near-constant gradients the memory
+    direction points uphill. Norm matching preserves direction and does not
+    change this. If <g^(nu), g_t> <= 0 for a variable, the raw gradient is
+    used for that variable in that step. The memory term is used whenever it
+    is descent-compatible and dropped when it is not.
 
-(3) SECOND-MOMENT CONTAMINATION.
-    The original MemoryFAdam / MemoryFRMSprop / MemoryFAdadelta fed the
-    fractional gradient into the squared-gradient accumulators as well.
-    Because the fractional gradient's magnitude fluctuates strongly (partial
-    cancellation between history terms), the variance estimates became
-    noisy and the effective per-coordinate step erratic.
-    FIX: use_raw_gradient_for_second_moment (default on): all squared-
-    gradient accumulators are driven by the raw gradient g_t; the
-    fractional gradient enters only the update direction / first moment.
-    This matches the design of the AdaptiveMemory* family and of
-    AOFGD_Adam. NOTE FOR THE PAPER: with this default, the statement that
-    MemoryFAdam uses the fractional gradient "in both moments" must be
-    updated (or set the flag to False to reproduce the old behaviour).
+(3) RAW SECOND MOMENT (use_raw_gradient_for_second_moment=True).
+    All squared-gradient accumulators are driven by the raw gradient g_t;
+    the fractional gradient enters only the update direction / first
+    moment. The magnitude of the fractional gradient fluctuates strongly
+    (partial cancellation between history terms), so variance estimates
+    built from it would make the effective per-coordinate step erratic.
+    Setting the flag to False feeds the fractional gradient into the
+    accumulators as well.
 
-(4) O(K) SLOT WRITES PER STEP (efficiency bug).
-    The original stored K per-lag slots and re-wrote ALL of them every step
-    (shift-by-one via K assigns plus stack/concat). This is O(K) variable
-    writes per parameter per step.
-    FIX: a single history slot of shape [K] + var.shape used as a CIRCULAR
-    buffer. Exactly one row is written per step
-    (scatter_nd_update at position t mod K); the GL coefficients are
-    rotated with tf.gather instead of moving the data. One write instead
-    of K, no stack/concat.
-    NOTE: slot layout changes from K slots "grad_history_i" to one slot
-    "grad_history"; old checkpoints of these optimizers are not restorable
-    (usage, constructor arguments, and training code are unchanged).
+HISTORY BUFFER.
+    Each variable has a single history slot of shape [K] + var.shape, used
+    as a CIRCULAR buffer. Exactly one row is written per step
+    (scatter_nd_update at position t mod K); the GL coefficients are rotated
+    with tf.gather instead of moving the data.
 
-Minor points kept/clarified:
+Further details:
   - Exact classical fallback: for |nu - 1| < 1e-12 or K == 1 the optimizer
     is bit-identical to its base optimizer (history machinery skipped).
-  - normalize_coefficients (divide by sum |c_k|) is kept for API
-    compatibility, but note that it *reduces* the DC gain further; with
-    norm matching enabled it only affects the pre-matching scale and is
-    therefore harmless.
+  - normalize_coefficients (divide by sum |c_k|) is available; it reduces
+    the DC gain further, and with norm matching enabled it only affects the
+    pre-matching scale. The GL-Memory group of the study uses K = 6 with
+    unnormalized coefficients.
   - Coefficients are generated by the Gamma-free recursion
-    c_0 = 1, c_k = (1 - (nu+1)/k) c_{k-1}, identical to before.
-  - Nesterov / centered / amsgrad branches verified against the Keras
-    reference updates; they were correct and are unchanged.
+    c_0 = 1, c_k = (1 - (nu+1)/k) c_{k-1}.
+  - The Nesterov / centered / amsgrad branches follow the Keras reference
+    updates.
 
 Definitions (canonical notation of the article)
 -----------------------------------------------
@@ -99,14 +83,14 @@ Implemented optimizers
     MemoryFRMSprop      (RMSprop, optional momentum / centered)
     MemoryFAdam         (Adam, optional AMSGrad)
     MemoryFAdadelta     (Adadelta)
-    -- new in this version --
+    -- extensions (appendix on the extensions of the memory-based families) --
     MemoryFAdagrad      (Adagrad)
     MemoryFAdamW        (AdamW, decoupled weight decay)
     MemoryFNadam        (Nadam, Nesterov-Adam)
     MemoryFAdamax       (Adamax, infinity-norm second moment)
 
-Usage (unchanged)
------------------
+Usage
+-----
     optimizer = MemoryFAdam(lr=1e-3, vderiv=0.9, history_size=6)
     model.compile(optimizer=optimizer, loss="sparse_categorical_crossentropy")
     model.fit(x, y, epochs=10)
@@ -282,7 +266,7 @@ class _MemoryFractionalBase:
     def _fractional_gradient(self, raw_grad, var):
         """
         Write the current gradient into the circular buffer and return the
-        corrected fractional gradient.
+        fractional gradient after the descent safeguard and norm matching.
 
         Steps:
           1. row  <- t mod K,   buffer[row] <- g_t          (single write)
@@ -367,7 +351,7 @@ class _MemoryFractionalBase:
 
 class MemoryFSGD(_MemoryFractionalBase, _KerasOptimizerBase):
     """
-    Explicit memory-based fractional SGD (corrected).
+    Explicit memory-based fractional SGD.
 
     Update (no momentum):
         theta_{t+1} = theta_t - lr * g_hat_t^(nu)
@@ -470,7 +454,7 @@ class MemoryFSGD(_MemoryFractionalBase, _KerasOptimizerBase):
 
 class MemoryFRMSprop(_MemoryFractionalBase, _KerasOptimizerBase):
     """
-    Explicit memory-based fractional RMSprop (corrected).
+    Explicit memory-based fractional RMSprop.
 
     The fractional gradient drives the update direction; the squared-
     gradient accumulator uses the raw gradient by default.
@@ -594,11 +578,11 @@ class MemoryFRMSprop(_MemoryFractionalBase, _KerasOptimizerBase):
 
 class MemoryFAdam(_MemoryFractionalBase, _KerasOptimizerBase):
     """
-    Explicit memory-based fractional Adam (corrected).
+    Explicit memory-based fractional Adam.
 
     First moment from the fractional gradient; second moment from the raw
     gradient by default (set use_raw_gradient_for_second_moment=False to
-    reproduce the original both-moments behaviour).
+    feed the fractional gradient into both moments).
     """
 
     def __init__(
@@ -726,7 +710,7 @@ class MemoryFAdam(_MemoryFractionalBase, _KerasOptimizerBase):
 
 class MemoryFAdadelta(_MemoryFractionalBase, _KerasOptimizerBase):
     """
-    Explicit memory-based fractional Adadelta (corrected).
+    Explicit memory-based fractional Adadelta.
 
     Direction from the fractional gradient; both accumulators from the raw
     gradient / raw-driven update by default.
@@ -823,7 +807,7 @@ class MemoryFAdadelta(_MemoryFractionalBase, _KerasOptimizerBase):
 
 
 # =============================================================================
-# MemoryFAdagrad  (new)
+# MemoryFAdagrad
 # =============================================================================
 
 
@@ -920,7 +904,7 @@ class MemoryFAdagrad(_MemoryFractionalBase, _KerasOptimizerBase):
 
 
 # =============================================================================
-# MemoryFAdamW  (new)
+# MemoryFAdamW
 # =============================================================================
 
 
@@ -968,7 +952,7 @@ class MemoryFAdamW(MemoryFAdam):
 
 
 # =============================================================================
-# MemoryFNadam  (new)
+# MemoryFNadam
 # =============================================================================
 
 
@@ -1090,7 +1074,7 @@ class MemoryFNadam(_MemoryFractionalBase, _KerasOptimizerBase):
 
 
 # =============================================================================
-# MemoryFAdamax  (new)
+# MemoryFAdamax
 # =============================================================================
 
 
